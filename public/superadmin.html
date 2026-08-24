@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Super Admin — Platform Control</title>
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+<div class="topbar">
+  <div class="brand">Platform Control<small>Super Admin</small></div>
+  <button class="btn btn-ghost btn-sm" id="logoutBtn" style="display:none; color:#F7F1E4; border-color:#5a6f52;">Log out</button>
+</div>
+
+<div class="wrap-narrow" id="loginView">
+  <div class="card" style="max-width:380px; margin:60px auto 0;">
+    <div class="section-title">Super Admin Log In</div>
+    <div class="field"><label for="loginEmail">Email</label><input type="email" id="loginEmail"></div>
+    <div class="field"><label for="loginPass">Password</label><input type="password" id="loginPass"></div>
+    <button class="btn btn-primary" id="loginBtn" style="width:100%;">Log In</button>
+    <p class="helper-text" id="loginError"></p>
+    <hr style="margin:20px 0; border:none; border-top:1px solid var(--line);">
+    <p class="helper-text">First time setting up the platform? Log in above with any account, then:</p>
+    <button class="btn btn-ghost btn-sm" id="bootstrapBtn" style="width:100%;">Make this account the Super Admin</button>
+    <p class="helper-text" id="bootstrapMsg"></p>
+  </div>
+</div>
+
+<div class="wrap" id="dashView" style="display:none;">
+  <div class="card" style="margin-bottom:20px;">
+    <div class="section-title">One-Time: Migrate "So Italian Catering" Data</div>
+    <p class="helper-text">Run this once to bring your original menu and quotes into the new multi-restaurant structure. Safe to skip if you're starting fresh.</p>
+    <div class="field-row">
+      <div class="field"><label>Owner's existing Auth UID</label><input type="text" id="migrateOwnerUid" placeholder="From Firebase Console → Authentication → Users"></div>
+      <div class="field"><label>Owner's email</label><input type="email" id="migrateOwnerEmail"></div>
+    </div>
+    <button class="btn btn-ghost btn-sm" id="migrateBtn">Migrate Legacy Data</button>
+    <p class="helper-text" id="migrateMsg"></p>
+  </div>
+
+  <div class="card" style="margin-bottom:20px;">
+    <div class="section-title">Add a New Restaurant</div>
+    <div class="field-row">
+      <div class="field"><label>Business name</label><input type="text" id="newName" placeholder="e.g. Tony's Pizza Catering"></div>
+      <div class="field"><label>Web address (auto-generated, editable)</label><input type="text" id="newSlug" placeholder="e.g. tonys-pizza"></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Owner's email (their login)</label><input type="email" id="newOwnerEmail"></div>
+      <div class="field"><label>Owner's password</label><input type="text" id="newOwnerPass" placeholder="Set an initial password"></div>
+    </div>
+    <button class="btn btn-primary" id="createTenantBtn">Create Restaurant Account</button>
+    <p class="helper-text" id="createTenantMsg"></p>
+  </div>
+
+  <div class="card">
+    <div class="section-title">All Restaurants</div>
+    <div id="tenantList"><p class="helper-text">Loading…</p></div>
+  </div>
+</div>
+
+<div id="toastHost"></div>
+
+<script type="module">
+import { db, auth } from "./js/firebase-config.js";
+import { collection, doc, updateDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js";
+
+const functions = getFunctions();
+const bootstrapSuperAdmin = httpsCallable(functions, "bootstrapSuperAdmin");
+const createTenant = httpsCallable(functions, "createTenant");
+const migrateLegacyData = httpsCallable(functions, "migrateLegacyData");
+
+document.getElementById("migrateBtn").addEventListener("click", async () => {
+  const ownerUid = document.getElementById("migrateOwnerUid").value.trim();
+  const ownerEmail = document.getElementById("migrateOwnerEmail").value.trim();
+  const msg = document.getElementById("migrateMsg");
+  const btn = document.getElementById("migrateBtn");
+  btn.disabled = true; btn.textContent = "Migrating…";
+  try {
+    const result = await migrateLegacyData({ tenantId: "so-italian-catering", ownerUid: ownerUid || null, ownerEmail: ownerEmail || null });
+    msg.textContent = `Done! Moved ${result.data.menuCount} menu items and ${result.data.quoteCount} quotes.`;
+    mostrarToast("Legacy data migrated");
+  } catch (e) {
+    msg.textContent = e.message || "Migration failed.";
+  }
+  btn.disabled = false; btn.textContent = "Migrate Legacy Data";
+});
+
+document.getElementById("loginBtn").addEventListener("click", async () => {
+  const email = document.getElementById("loginEmail").value.trim();
+  const pass = document.getElementById("loginPass").value;
+  try { await signInWithEmailAndPassword(auth, email, pass); }
+  catch (err) { document.getElementById("loginError").textContent = "Incorrect email or password."; }
+});
+document.getElementById("logoutBtn").addEventListener("click", () => signOut(auth));
+
+document.getElementById("bootstrapBtn").addEventListener("click", async () => {
+  const msg = document.getElementById("bootstrapMsg");
+  if (!auth.currentUser) { msg.textContent = "Log in first with the account you want to make Super Admin."; return; }
+  try {
+    await bootstrapSuperAdmin();
+    msg.textContent = "Done! Signing you back in as Super Admin…";
+    await signOut(auth);
+    setTimeout(() => window.location.reload(), 800);
+  } catch (e) {
+    msg.textContent = e.message || "Couldn't set up Super Admin.";
+  }
+});
+
+onAuthStateChanged(auth, async (user) => {
+  document.getElementById("loginView").style.display = "none";
+  document.getElementById("dashView").style.display = "none";
+  document.getElementById("logoutBtn").style.display = "none";
+  if (!user) { document.getElementById("loginView").style.display = "block"; return; }
+
+  const tokenResult = await user.getIdTokenResult(true);
+  if (tokenResult.claims.role !== "superadmin") {
+    document.getElementById("loginError").textContent = "This account isn't a Super Admin.";
+    document.getElementById("loginView").style.display = "block";
+    return;
+  }
+
+  document.getElementById("dashView").style.display = "block";
+  document.getElementById("logoutBtn").style.display = "inline-flex";
+  escucharTenants();
+});
+
+document.getElementById("newName").addEventListener("input", (e) => {
+  const slugField = document.getElementById("newSlug");
+  if (!slugField.dataset.touched) {
+    slugField.value = e.target.value.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+  }
+});
+document.getElementById("newSlug").addEventListener("input", (e) => { e.target.dataset.touched = "true"; });
+
+document.getElementById("createTenantBtn").addEventListener("click", async () => {
+  const name = document.getElementById("newName").value.trim();
+  const slug = document.getElementById("newSlug").value.trim();
+  const ownerEmail = document.getElementById("newOwnerEmail").value.trim();
+  const ownerPassword = document.getElementById("newOwnerPass").value;
+  const msg = document.getElementById("createTenantMsg");
+
+  if (!name || !slug || !ownerEmail || !ownerPassword) { msg.textContent = "Please fill in every field."; return; }
+
+  const btn = document.getElementById("createTenantBtn");
+  btn.disabled = true; btn.textContent = "Creating…";
+  try {
+    const result = await createTenant({ name, slug, ownerEmail, ownerPassword });
+    msg.textContent = `Created! Web address: ${result.data.tenantId}`;
+    document.getElementById("newName").value = "";
+    document.getElementById("newSlug").value = "";
+    document.getElementById("newSlug").dataset.touched = "";
+    document.getElementById("newOwnerEmail").value = "";
+    document.getElementById("newOwnerPass").value = "";
+    mostrarToast("Restaurant created");
+  } catch (e) {
+    msg.textContent = e.message || "Couldn't create the restaurant.";
+  }
+  btn.disabled = false; btn.textContent = "Create Restaurant Account";
+});
+
+function escucharTenants() {
+  onSnapshot(collection(db, "tenants"), snap => {
+    const tenants = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    renderTenants(tenants);
+  });
+}
+
+function renderTenants(tenants) {
+  const list = document.getElementById("tenantList");
+  if (tenants.length === 0) { list.innerHTML = `<p class="helper-text">No restaurants yet.</p>`; return; }
+
+  list.innerHTML = tenants.map(t => `
+    <div class="quote-row" style="grid-template-columns: 1.4fr 1fr 1fr auto;">
+      <div><strong>${t.name}</strong><br><span class="helper-text">${t.ownerEmail || "—"}</span></div>
+      <div><span class="helper-text">/${t.id}</span></div>
+      <div><span class="badge ${t.active === false ? "badge-perdida" : "badge-cerrada"}">${t.active === false ? "Inactive" : "Active"}</span></div>
+      <div><button class="btn btn-ghost btn-sm toggle-active-btn" data-id="${t.id}" data-active="${t.active !== false}">${t.active === false ? "Activate" : "Deactivate"}</button></div>
+    </div>
+  `).join("");
+
+  list.querySelectorAll(".toggle-active-btn").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const isActive = btn.dataset.active === "true";
+      await updateDoc(doc(db, "tenants", btn.dataset.id), { active: !isActive });
+      mostrarToast(isActive ? "Restaurant deactivated" : "Restaurant activated");
+    });
+  });
+}
+
+function mostrarToast(msg) {
+  const host = document.getElementById("toastHost");
+  const t = document.createElement("div");
+  t.className = "toast"; t.textContent = msg;
+  host.appendChild(t);
+  setTimeout(() => t.remove(), 2500);
+}
+</script>
+
+</body>
+</html>

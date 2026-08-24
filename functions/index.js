@@ -7,30 +7,22 @@ const admin = require("firebase-admin");
 admin.initializeApp();
 const db = admin.firestore();
 
-// Set this "secret" once from the terminal (see README):
-//   firebase functions:secrets:set RESEND_API_KEY
 const RESEND_API_KEY = defineSecret("RESEND_API_KEY");
 
-// DEMO MODE: using Resend's shared test domain.
-// With this domain, Resend ONLY allows sending emails to the address
-// you signed up with on Resend (your own email) — not to real clients yet.
-// Once you have your own domain, change this line to something like
-// "So Italian Catering <quotes@yourdomain.com>" and verify the domain
-// in Resend (Domains → Add Domain) to be able to send to anyone.
-const FROM_EMAIL = "So Italian Catering <onboarding@resend.dev>";
+// Shared sending domain while every tenant is in demo mode. Once a tenant
+// (or the platform) verifies its own domain in Resend, this can become
+// per-tenant instead of one shared address.
+const FROM_EMAIL = "Catering Quotes <onboarding@resend.dev>";
 
-// Put the email you signed up with on Resend here — that's where you'll
-// get the "new quote" notification, and also the only address you can
-// send the test pre-quote to while in demo mode.
-const OWNER_EMAIL = "movedancea@gmail.com";
+// Where YOU (the platform owner) get told about platform-level things
+// like a new restaurant signing up. NOT the same as a restaurant's own
+// "new lead" notification — that goes to their own ownerEmail.
+const PLATFORM_OWNER_EMAIL = "movedancea@gmail.com";
 
 async function enviarCorreo({ to, subject, html, apiKey }) {
   const res = await fetch("https://api.resend.com/emails", {
     method: "POST",
-    headers: {
-      "Authorization": `Bearer ${apiKey}`,
-      "Content-Type": "application/json"
-    },
+    headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
     body: JSON.stringify({ from: FROM_EMAIL, to, subject, html })
   });
   if (!res.ok) {
@@ -39,9 +31,7 @@ async function enviarCorreo({ to, subject, html, apiKey }) {
   }
 }
 
-function fmtPrice(n) {
-  return `$${Number(n || 0).toFixed(2)}`;
-}
+function fmtPrice(n) { return `$${Number(n || 0).toFixed(2)}`; }
 
 function itemsHtml(items, personas) {
   return (items || []).map(i =>
@@ -49,50 +39,49 @@ function itemsHtml(items, personas) {
   ).join("");
 }
 
-// ------------------------------------------------------------------
-// Email template settings: logo, business name, intro/policies/footer
-// text, editable anytime from the dashboard's "Email Template" tab.
-// Every quote email is built from these settings, with sensible
-// defaults if the owner hasn't customized anything yet.
-// ------------------------------------------------------------------
 const DEFAULT_TEMPLATE = {
-  businessName: "So Italian Catering",
+  businessName: "Our Restaurant",
   introText: "Hi {clientName}, thanks for your interest! Here's a preliminary summary of your quote:",
   policiesText: "",
   footerText: "Thank you for considering us for your event!",
-  logoUrl: null
+  logoUrl: null,
+  primaryColor: "#C4622D",
+  accentColor: "#33482E"
 };
 
-async function getTemplateSettings() {
-  const snap = await db.collection("settings").doc("quoteEmail").get();
+async function getTenant(tenantId) {
+  const snap = await db.collection("tenants").doc(tenantId).get();
+  return snap.exists ? { id: snap.id, ...snap.data() } : null;
+}
+
+async function getTemplateSettings(tenantId) {
+  const snap = await db.collection("tenants").doc(tenantId).collection("settings").doc("quoteEmail").get();
   return snap.exists ? { ...DEFAULT_TEMPLATE, ...snap.data() } : { ...DEFAULT_TEMPLATE };
 }
 
-// Builds the shared quote-email HTML using the current template settings.
-// `heading` / `statusLine` / `disclaimer` are optional extras used by the
-// different email types (new quote vs. update vs. plain message).
 function buildQuoteEmailHtml(q, settings, { heading, statusLine, disclaimer } = {}) {
+  const accent = settings.accentColor || DEFAULT_TEMPLATE.accentColor;
   const logoHtml = settings.logoUrl
     ? `<img src="${settings.logoUrl}" alt="${settings.businessName}" style="max-height:70px; margin-bottom:14px; display:block;">`
-    : `<h2 style="color:#33482E; margin-top:0;">${settings.businessName}</h2>`;
+    : `<h2 style="color:${accent}; margin-top:0;">${settings.businessName}</h2>`;
 
   const intro = (settings.introText || DEFAULT_TEMPLATE.introText).replace("{clientName}", q.clienteNombre);
 
   const policiesHtml = settings.policiesText
-    ? `<div style="margin-top:16px; padding:14px; background:#F7F1E4; border-radius:8px;"><strong style="color:#33482E;">Policies</strong><p style="white-space:pre-line; margin:6px 0 0; font-size:14px;">${settings.policiesText}</p></div>`
+    ? `<div style="margin-top:16px; padding:14px; background:#F7F1E4; border-radius:8px;"><strong style="color:${accent};">Policies</strong><p style="white-space:pre-line; margin:6px 0 0; font-size:14px;">${settings.policiesText}</p></div>`
     : "";
 
   return `
     <div style="font-family:sans-serif; color:#2B2119; max-width:560px;">
       ${logoHtml}
-      ${heading ? `<h3 style="color:#33482E;">${heading}</h3>` : ""}
+      ${heading ? `<h3 style="color:${accent};">${heading}</h3>` : ""}
       <p>${intro}</p>
       <p><strong>Event date:</strong> ${q.fechaEvento}<br>
          <strong>Number of guests:</strong> ${q.numPersonas}${statusLine ? `<br><strong>Status:</strong> ${statusLine}` : ""}</p>
       <table style="width:100%; border-collapse:collapse; margin:12px 0;">
         ${itemsHtml(q.items, q.numPersonas)}
-        <tr><td style="padding:8px; font-weight:bold; border-top:2px solid #33482E;">Total</td>
-            <td style="padding:8px; font-weight:bold; text-align:right; border-top:2px solid #33482E;">${fmtPrice(q.total)}</td></tr>
+        <tr><td style="padding:8px; font-weight:bold; border-top:2px solid ${accent};">Total</td>
+            <td style="padding:8px; font-weight:bold; text-align:right; border-top:2px solid ${accent};">${fmtPrice(q.total)}</td></tr>
       </table>
       ${disclaimer ? `<p><strong>${disclaimer}</strong></p>` : ""}
       ${policiesHtml}
@@ -101,16 +90,28 @@ function buildQuoteEmailHtml(q, settings, { heading, statusLine, disclaimer } = 
   `;
 }
 
+function requireTenantAccess(request, tenantId) {
+  if (!request.auth) throw new Error("Unauthorized");
+  const claims = request.auth.token;
+  if (claims.role !== "superadmin" && claims.tenantId !== tenantId) {
+    throw new Error("Unauthorized for this restaurant");
+  }
+}
+
 // ------------------------------------------------------------------
-// 1. Triggers automatically when a client submits the form.
-//    Sends: (a) preliminary quote to the client, (b) alert to the owner.
+// 1. Triggers when a client submits a quote form for any tenant.
 // ------------------------------------------------------------------
 exports.onCotizacionCreated = onDocumentCreated(
-  { document: "cotizaciones/{quoteId}", secrets: [RESEND_API_KEY] },
+  { document: "tenants/{tenantId}/cotizaciones/{quoteId}", secrets: [RESEND_API_KEY] },
   async (event) => {
+    const tenantId = event.params.tenantId;
     const q = event.data.data();
     const apiKey = RESEND_API_KEY.value();
-    const settings = await getTemplateSettings();
+
+    const tenant = await getTenant(tenantId);
+    if (!tenant || tenant.active === false) return; // safety net, shouldn't normally happen
+
+    const settings = await getTemplateSettings(tenantId);
 
     const resumenHtml = buildQuoteEmailHtml(q, settings, {
       disclaimer: "This is a preliminary price, not a final confirmation. A member of our team will be in touch soon to confirm all the details."
@@ -123,40 +124,41 @@ exports.onCotizacionCreated = onDocumentCreated(
       apiKey
     });
 
-    const avisoHtml = `
-      <div style="font-family:sans-serif;">
-        <h3>New quote request received</h3>
-        <p><strong>${q.clienteNombre}</strong> — ${q.clienteEmail} — ${q.clienteTelefono}</p>
-        <p>Event: ${q.fechaEvento} · ${q.numPersonas} guests · Total: ${fmtPrice(q.total)}</p>
-        <p>Check it out in the admin dashboard.</p>
-      </div>
-    `;
-
-    await enviarCorreo({
-      to: OWNER_EMAIL,
-      subject: `New quote: ${q.clienteNombre} (${q.fechaEvento})`,
-      html: avisoHtml,
-      apiKey
-    });
+    if (tenant.ownerEmail) {
+      const avisoHtml = `
+        <div style="font-family:sans-serif;">
+          <h3>New quote request received</h3>
+          <p><strong>${q.clienteNombre}</strong> — ${q.clienteEmail} — ${q.clienteTelefono}</p>
+          <p>Event: ${q.fechaEvento} · ${q.numPersonas} guests · Total: ${fmtPrice(q.total)}</p>
+          <p>Check it out in your dashboard.</p>
+        </div>
+      `;
+      await enviarCorreo({
+        to: tenant.ownerEmail,
+        subject: `New quote: ${q.clienteNombre} (${q.fechaEvento})`,
+        html: avisoHtml,
+        apiKey
+      });
+    }
   }
 );
 
 // ------------------------------------------------------------------
-// 2. Called from the dashboard when the owner sends a message to a client.
+// 2. Owner sends a message to a client.
 // ------------------------------------------------------------------
 exports.sendMessageToClient = onCall(
   { secrets: [RESEND_API_KEY] },
   async (request) => {
-    if (!request.auth) throw new Error("Unauthorized");
-    const { quoteId, texto, adjuntoUrl, adjuntoNombre, cotizacion } = request.data;
+    const { tenantId, quoteId, texto, adjuntoUrl, adjuntoNombre, cotizacion } = request.data;
+    requireTenantAccess(request, tenantId);
 
-    const snap = await db.collection("cotizaciones").doc(quoteId).get();
+    const snap = await db.collection("tenants").doc(tenantId).collection("cotizaciones").doc(quoteId).get();
     if (!snap.exists) throw new Error("Quote not found");
     const q = snap.data();
-    const settings = await getTemplateSettings();
+    const settings = await getTemplateSettings(tenantId);
 
     const adjuntoHtml = adjuntoUrl
-      ? `<p><a href="${adjuntoUrl}" style="color:#33482E; font-weight:bold;">📎 View attached file${adjuntoNombre ? `: ${adjuntoNombre}` : ""}</a></p>`
+      ? `<p><a href="${adjuntoUrl}" style="color:${settings.accentColor}; font-weight:bold;">📎 View attached file${adjuntoNombre ? `: ${adjuntoNombre}` : ""}</a></p>`
       : "";
 
     const cotizacionHtml = (cotizacion && cotizacion.items && cotizacion.items.length)
@@ -164,8 +166,8 @@ exports.sendMessageToClient = onCall(
         <p><strong>Number of guests:</strong> ${cotizacion.numPersonas}</p>
         <table style="width:100%; border-collapse:collapse; margin:12px 0;">
           ${itemsHtml(cotizacion.items, cotizacion.numPersonas)}
-          <tr><td style="padding:8px; font-weight:bold; border-top:2px solid #33482E;">Total</td>
-              <td style="padding:8px; font-weight:bold; text-align:right; border-top:2px solid #33482E;">${fmtPrice(cotizacion.total)}</td></tr>
+          <tr><td style="padding:8px; font-weight:bold; border-top:2px solid ${settings.accentColor};">Total</td>
+              <td style="padding:8px; font-weight:bold; text-align:right; border-top:2px solid ${settings.accentColor};">${fmtPrice(cotizacion.total)}</td></tr>
         </table>`
       : "";
 
@@ -185,26 +187,20 @@ exports.sendMessageToClient = onCall(
 );
 
 // ------------------------------------------------------------------
-// 3. Called from the dashboard when a quote is edited or its status changes.
-//    Sends the client the full, up-to-date quote summary.
+// 3. Quote edited or status changed — resend full summary to client.
 // ------------------------------------------------------------------
 exports.sendStatusUpdateEmail = onCall(
   { secrets: [RESEND_API_KEY] },
   async (request) => {
-    if (!request.auth) throw new Error("Unauthorized");
-    const { quoteId, nuevoEstado } = request.data;
+    const { tenantId, quoteId, nuevoEstado } = request.data;
+    requireTenantAccess(request, tenantId);
 
-    // Read AFTER the dashboard already saved the changes to Firestore,
-    // so this reflects the most current menu/total/guest count.
-    const snap = await db.collection("cotizaciones").doc(quoteId).get();
+    const snap = await db.collection("tenants").doc(tenantId).collection("cotizaciones").doc(quoteId).get();
     if (!snap.exists) throw new Error("Quote not found");
     const q = snap.data();
-    const settings = await getTemplateSettings();
+    const settings = await getTemplateSettings(tenantId);
 
-    const html = buildQuoteEmailHtml(q, settings, {
-      heading: "Your quote has been updated",
-      statusLine: nuevoEstado
-    });
+    const html = buildQuoteEmailHtml(q, settings, { heading: "Your quote has been updated", statusLine: nuevoEstado });
 
     await enviarCorreo({
       to: q.clienteEmail,
@@ -218,55 +214,158 @@ exports.sendStatusUpdateEmail = onCall(
 );
 
 // ------------------------------------------------------------------
-// 4. Runs automatically every day at 9am (Indiana / Eastern time).
-//    Emails the owner a reminder for any quote that's been sitting in
-//    "Contacted" or "Quote Sent" status for 2+ days with no further update.
+// 4. Daily 9am reminder (Indiana time), across every active tenant.
 // ------------------------------------------------------------------
 exports.dailyFollowUpCheck = onSchedule(
   { schedule: "every day 09:00", timeZone: "America/Indiana/Indianapolis", secrets: [RESEND_API_KEY] },
   async () => {
-    const snap = await db.collection("cotizaciones").where("estado", "in", ["Contacted", "Quote Sent"]).get();
+    const snap = await db.collectionGroup("cotizaciones").where("estado", "in", ["Contacted", "Quote Sent"]).get();
     const twoDaysMs = 2 * 24 * 60 * 60 * 1000;
 
-    const pending = snap.docs.filter(d => {
+    const byTenant = {};
+    snap.docs.forEach(d => {
       const data = d.data();
-      if (!data.fechaContactado || data.recordatorioEnviado) return false;
+      if (!data.fechaContactado || data.recordatorioEnviado) return;
       const contactedAt = data.fechaContactado.toMillis ? data.fechaContactado.toMillis() : 0;
-      return Date.now() - contactedAt >= twoDaysMs;
+      if (Date.now() - contactedAt < twoDaysMs) return;
+      const tenantId = d.ref.parent.parent.id;
+      if (!byTenant[tenantId]) byTenant[tenantId] = [];
+      byTenant[tenantId].push(d);
     });
 
-    if (pending.length === 0) return null;
+    const apiKey = RESEND_API_KEY.value();
 
-    const rows = pending.map(d => {
-      const q = d.data();
-      return `<tr><td style="padding:6px 10px; border-bottom:1px solid #E4DAC4;">${q.clienteNombre}</td><td style="padding:6px 10px; border-bottom:1px solid #E4DAC4;">${q.clienteEmail}</td><td style="padding:6px 10px; border-bottom:1px solid #E4DAC4;">${q.fechaEvento || "—"}</td></tr>`;
-    }).join("");
+    for (const tenantId of Object.keys(byTenant)) {
+      const tenant = await getTenant(tenantId);
+      if (!tenant || tenant.active === false || !tenant.ownerEmail) continue;
 
-    const html = `
-      <div style="font-family:sans-serif; color:#2B2119;">
-        <h2 style="color:#33482E;">Follow-up reminder</h2>
-        <p>These clients have been in "Contacted" or "Quote Sent" status for 2 or more days with no further update. Time to reach out again:</p>
-        <table style="width:100%; border-collapse:collapse; margin:12px 0;">
-          <tr style="text-align:left; border-bottom:2px solid #33482E;">
-            <th style="padding:6px 10px;">Client</th><th style="padding:6px 10px;">Email</th><th style="padding:6px 10px;">Event date</th>
-          </tr>
-          ${rows}
-        </table>
-        <p>Check the full details in the admin dashboard.</p>
-      </div>
-    `;
+      const docs = byTenant[tenantId];
+      const rows = docs.map(d => {
+        const q = d.data();
+        return `<tr><td style="padding:6px 10px; border-bottom:1px solid #E4DAC4;">${q.clienteNombre}</td><td style="padding:6px 10px; border-bottom:1px solid #E4DAC4;">${q.clienteEmail}</td><td style="padding:6px 10px; border-bottom:1px solid #E4DAC4;">${q.fechaEvento || "—"}</td></tr>`;
+      }).join("");
 
-    await enviarCorreo({
-      to: OWNER_EMAIL,
-      subject: `Follow-up reminder: ${pending.length} client${pending.length > 1 ? "s" : ""} to contact`,
-      html,
-      apiKey: RESEND_API_KEY.value()
-    });
+      const html = `
+        <div style="font-family:sans-serif; color:#2B2119;">
+          <h2 style="color:#33482E;">Follow-up reminder</h2>
+          <p>These clients have been in "Contacted" or "Quote Sent" status for 2 or more days with no further update:</p>
+          <table style="width:100%; border-collapse:collapse; margin:12px 0;">
+            <tr style="text-align:left; border-bottom:2px solid #33482E;"><th style="padding:6px 10px;">Client</th><th style="padding:6px 10px;">Email</th><th style="padding:6px 10px;">Event date</th></tr>
+            ${rows}
+          </table>
+        </div>
+      `;
 
-    const batch = db.batch();
-    pending.forEach(d => batch.update(d.ref, { recordatorioEnviado: true }));
-    await batch.commit();
+      await enviarCorreo({
+        to: tenant.ownerEmail,
+        subject: `Follow-up reminder: ${docs.length} client${docs.length > 1 ? "s" : ""} to contact`,
+        html, apiKey
+      });
+
+      const batch = db.batch();
+      docs.forEach(d => batch.update(d.ref, { recordatorioEnviado: true }));
+      await batch.commit();
+    }
 
     return null;
   }
 );
+
+// ------------------------------------------------------------------
+// 5. ONE-TIME bootstrap: the very first person to call this becomes the
+//    platform super admin. Fails if a super admin already exists.
+// ------------------------------------------------------------------
+exports.bootstrapSuperAdmin = onCall(async (request) => {
+  if (!request.auth) throw new Error("Unauthorized");
+  const existing = await db.collection("superadmins").limit(1).get();
+  if (!existing.empty) throw new Error("A super admin already exists for this platform.");
+
+  await admin.auth().setCustomUserClaims(request.auth.uid, { role: "superadmin" });
+  await db.collection("superadmins").doc(request.auth.uid).set({
+    email: request.auth.token.email || null,
+    createdAt: admin.firestore.FieldValue.serverTimestamp()
+  });
+  return { ok: true };
+});
+
+// ------------------------------------------------------------------
+// 6. Super admin creates a new restaurant account.
+// ------------------------------------------------------------------
+exports.createTenant = onCall(async (request) => {
+  if (!request.auth || request.auth.token.role !== "superadmin") throw new Error("Unauthorized");
+  const { name, slug, ownerEmail, ownerPassword } = request.data;
+  if (!name || !slug || !ownerEmail || !ownerPassword) throw new Error("Missing required fields");
+
+  const cleanSlug = slug.toLowerCase().trim().replace(/[^a-z0-9-]/g, "-");
+  const tenantRef = db.collection("tenants").doc(cleanSlug);
+  const existing = await tenantRef.get();
+  if (existing.exists) throw new Error("That web address is already taken. Choose a different one.");
+
+  const userRecord = await admin.auth().createUser({ email: ownerEmail, password: ownerPassword });
+  await admin.auth().setCustomUserClaims(userRecord.uid, { tenantId: cleanSlug });
+
+  await tenantRef.set({
+    name, active: true, ownerEmail, ownerUid: userRecord.uid,
+    createdAt: admin.firestore.FieldValue.serverTimestamp()
+  });
+
+  await tenantRef.collection("settings").doc("quoteEmail").set({
+    businessName: name,
+    introText: "Hi {clientName}, thanks for your interest! Here's a preliminary summary of your quote:",
+    policiesText: "",
+    footerText: "Thank you for considering us for your event!",
+    logoUrl: null,
+    primaryColor: "#C4622D",
+    accentColor: "#33482E"
+  });
+
+  return { ok: true, tenantId: cleanSlug };
+});
+
+// ------------------------------------------------------------------
+// 7. ONE-TIME: moves the original "So Italian Catering" data (from
+//    before multi-tenant support) into the new tenants/{tenantId}
+//    structure, and links an existing Auth account as its owner.
+// ------------------------------------------------------------------
+exports.migrateLegacyData = onCall(async (request) => {
+  if (!request.auth || request.auth.token.role !== "superadmin") throw new Error("Unauthorized");
+  const { tenantId, ownerUid, ownerEmail } = request.data;
+  if (!tenantId) throw new Error("Missing tenantId");
+
+  const tenantRef = db.collection("tenants").doc(tenantId);
+  const tenantSnap = await tenantRef.get();
+  if (!tenantSnap.exists) {
+    await tenantRef.set({
+      name: "So Italian Catering",
+      active: true,
+      ownerEmail: ownerEmail || null,
+      ownerUid: ownerUid || null,
+      createdAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+  }
+
+  const oldMenu = await db.collection("menu").get();
+  for (const d of oldMenu.docs) {
+    await tenantRef.collection("menu").doc(d.id).set(d.data());
+  }
+
+  const oldSettings = await db.collection("settings").doc("quoteEmail").get();
+  if (oldSettings.exists) {
+    await tenantRef.collection("settings").doc("quoteEmail").set(oldSettings.data(), { merge: true });
+  }
+
+  const oldQuotes = await db.collection("cotizaciones").get();
+  for (const d of oldQuotes.docs) {
+    await tenantRef.collection("cotizaciones").doc(d.id).set(d.data());
+    const oldMsgs = await d.ref.collection("mensajes").get();
+    for (const m of oldMsgs.docs) {
+      await tenantRef.collection("cotizaciones").doc(d.id).collection("mensajes").doc(m.id).set(m.data());
+    }
+  }
+
+  if (ownerUid) {
+    await admin.auth().setCustomUserClaims(ownerUid, { tenantId });
+  }
+
+  return { ok: true, menuCount: oldMenu.size, quoteCount: oldQuotes.size };
+});

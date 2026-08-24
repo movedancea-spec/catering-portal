@@ -3,18 +3,23 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Catering Quote — So Italian Catering</title>
+<title>Catering Quote</title>
 <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
 
 <div class="topbar">
-  <div class="brand">So Italian Catering<small>Online Quote Request</small></div>
+  <div class="brand" id="brandHeader">Loading…</div>
 </div>
 
 <div class="wrap-narrow">
 
-  <div id="formView">
+  <div id="unavailableView" class="card" style="display:none; text-align:center; padding:48px 24px;">
+    <div class="display" style="font-size:22px; margin-bottom:8px;">This page isn't available right now</div>
+    <p>Please contact the restaurant directly to request a catering quote.</p>
+  </div>
+
+  <div id="formView" style="display:none;">
     <div class="card">
       <div class="section-title">1. Event Details</div>
       <div class="field-row">
@@ -82,21 +87,68 @@
 
 <script type="module">
 import { db } from "./js/firebase-config.js";
-import { collection, addDoc, getDocs, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { collection, doc, getDoc, getDocs, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
+// ---------- Tenant resolution ----------
+// Prefers a real subdomain (pizza-place.yourdomain.com -> "pizza-place").
+// Falls back to a ?biz=slug query param, useful for testing on the
+// temporary *.web.app domain before a custom domain is set up.
+function resolveTenantId() {
+  const host = window.location.hostname;
+  const isPlatformDomain = host.endsWith(".web.app") || host.endsWith(".firebaseapp.com") || host === "localhost";
+  const parts = host.split(".");
+  if (!isPlatformDomain && parts.length > 2 && parts[0] !== "www") {
+    return parts[0];
+  }
+  const params = new URLSearchParams(window.location.search);
+  return params.get("biz") || "so-italian-catering";
+}
+
+const tenantId = resolveTenantId();
 let menuItems = [];
-const selected = {}; // itemId -> selected (boolean)
+const selected = {};
+
+function applyBranding(tenant, settings) {
+  document.title = `${settings.businessName || tenant.name} — Catering Quote`;
+  const header = document.getElementById("brandHeader");
+  if (settings.logoUrl) {
+    header.innerHTML = `<img src="${settings.logoUrl}" alt="${settings.businessName || tenant.name}" style="max-height:44px; display:block;">`;
+  } else {
+    header.innerHTML = `${settings.businessName || tenant.name}<small>Online Quote Request</small>`;
+  }
+  if (settings.primaryColor || settings.accentColor) {
+    const style = document.createElement("style");
+    style.textContent = `:root { ${settings.primaryColor ? `--terracotta: ${settings.primaryColor}; --terracotta-dark: ${settings.primaryColor};` : ""} ${settings.accentColor ? `--basil: ${settings.accentColor}; --basil-dark: ${settings.accentColor};` : ""} }`;
+    document.head.appendChild(style);
+  }
+}
+
+async function init() {
+  const tenantSnap = await getDoc(doc(db, "tenants", tenantId));
+
+  if (!tenantSnap.exists() || tenantSnap.data().active === false) {
+    document.getElementById("unavailableView").style.display = "block";
+    document.getElementById("brandHeader").textContent = "Catering Quote";
+    return;
+  }
+
+  const tenant = tenantSnap.data();
+  const settingsSnap = await getDoc(doc(db, "tenants", tenantId, "settings", "quoteEmail"));
+  const settings = settingsSnap.exists() ? settingsSnap.data() : {};
+  applyBranding(tenant, settings);
+
+  document.getElementById("formView").style.display = "block";
+  cargarMenu();
+}
 
 async function cargarMenu() {
   const container = document.getElementById("menuContainer");
   try {
-    const snap = await getDocs(collection(db, "menu"));
-    menuItems = snap.docs
-      .map(d => ({ id: d.id, ...d.data() }))
-      .filter(i => i.activo !== false);
+    const snap = await getDocs(collection(db, "tenants", tenantId, "menu"));
+    menuItems = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(i => i.activo !== false);
 
     if (menuItems.length === 0) {
-      container.innerHTML = `<p class="helper-text">No menu items yet. Add them from the admin dashboard.</p>`;
+      container.innerHTML = `<p class="helper-text">No menu items yet. Add them from the restaurant's admin dashboard.</p>`;
       return;
     }
 
@@ -130,7 +182,7 @@ async function cargarMenu() {
       });
     });
   } catch (err) {
-    container.innerHTML = `<p class="helper-text">Couldn't load the menu. Please check the Firebase configuration (js/firebase-config.js).</p>`;
+    container.innerHTML = `<p class="helper-text">Couldn't load the menu.</p>`;
     console.error(err);
   }
 }
@@ -140,7 +192,6 @@ function actualizarTicket() {
   const totalEl = document.getElementById("ticketTotal");
   const submitBtn = document.getElementById("submitBtn");
   const personas = parseInt(document.getElementById("personas").value, 10) || 0;
-
   const chosen = menuItems.filter(i => selected[i.id]);
 
   if (chosen.length === 0) {
@@ -175,19 +226,10 @@ document.getElementById("submitBtn").addEventListener("click", async () => {
     alert("Please fill in the event date, number of guests, name, email, and phone.");
     return;
   }
-
   const chosen = menuItems.filter(i => selected[i.id]);
-  if (chosen.length === 0) {
-    alert("Please select at least one menu item.");
-    return;
-  }
+  if (chosen.length === 0) { alert("Please select at least one menu item."); return; }
 
-  const items = chosen.map(i => ({
-    menuId: i.id,
-    nombre: i.nombre,
-    precio: i.precio,
-    cantidad: 1
-  }));
+  const items = chosen.map(i => ({ menuId: i.id, nombre: i.nombre, precio: i.precio, cantidad: 1 }));
   const total = items.reduce((sum, i) => sum + i.precio * i.cantidad * personas, 0);
 
   const btn = document.getElementById("submitBtn");
@@ -195,19 +237,11 @@ document.getElementById("submitBtn").addEventListener("click", async () => {
   btn.textContent = "Sending…";
 
   try {
-    await addDoc(collection(db, "cotizaciones"), {
-      clienteNombre: nombre,
-      clienteEmail: correo,
-      clienteTelefono: telefono,
-      fechaEvento: fecha,
-      lugar: lugar || null,
-      numPersonas: personas,
-      items,
-      total,
-      notas: notas || null,
-      estado: "New",
-      creadoEn: serverTimestamp(),
-      actualizadoEn: serverTimestamp()
+    await addDoc(collection(db, "tenants", tenantId, "cotizaciones"), {
+      clienteNombre: nombre, clienteEmail: correo, clienteTelefono: telefono,
+      fechaEvento: fecha, lugar: lugar || null, numPersonas: personas,
+      items, total, notas: notas || null, estado: "New",
+      creadoEn: serverTimestamp(), actualizadoEn: serverTimestamp()
     });
 
     document.getElementById("formView").style.display = "none";
@@ -222,7 +256,7 @@ document.getElementById("submitBtn").addEventListener("click", async () => {
   }
 });
 
-cargarMenu();
+init();
 </script>
 
 </body>

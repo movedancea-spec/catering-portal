@@ -3,64 +3,55 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Dashboard — So Italian Catering</title>
+<title>Restaurant Dashboard</title>
 <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
 
 <div class="topbar">
-  <div class="brand">So Italian Catering<small>Admin Dashboard</small></div>
+  <div class="brand" id="brandHeader">Dashboard</div>
   <button class="btn btn-ghost btn-sm" id="logoutBtn" style="display:none; color:#F7F1E4; border-color:#5a6f52;">Log out</button>
 </div>
 
-<!-- LOGIN -->
 <div class="wrap-narrow" id="loginView">
   <div class="card" style="max-width:380px; margin:60px auto 0;">
     <div class="section-title">Log In</div>
-    <div class="field">
-      <label for="loginEmail">Email</label>
-      <input type="email" id="loginEmail">
-    </div>
-    <div class="field">
-      <label for="loginPass">Password</label>
-      <input type="password" id="loginPass">
-    </div>
+    <div class="field"><label for="loginEmail">Email</label><input type="email" id="loginEmail"></div>
+    <div class="field"><label for="loginPass">Password</label><input type="password" id="loginPass"></div>
     <button class="btn btn-primary" id="loginBtn" style="width:100%;">Log In</button>
     <p class="helper-text" id="loginError"></p>
-    <p class="helper-text">Users are created from Firebase Console → Authentication → Users.</p>
+    <p class="helper-text">Restaurant owners only. Platform administrator? <a href="superadmin.html">Go to Super Admin</a>.</p>
   </div>
 </div>
 
-<!-- DASHBOARD -->
+<div class="wrap-narrow" id="suspendedView" style="display:none;">
+  <div class="card" style="max-width:420px; margin:60px auto 0; text-align:center;">
+    <div class="display" style="font-size:20px; margin-bottom:8px;">Account paused</div>
+    <p>This account is currently inactive. Please contact your platform administrator to reactivate it.</p>
+  </div>
+</div>
+
 <div class="wrap" id="dashView" style="display:none;">
   <div class="tabs">
     <div class="tab active" data-tab="cotizaciones">Quotes</div>
     <div class="tab" data-tab="menu">Menu</div>
-    <div class="tab" data-tab="template">Email Template</div>
+    <div class="tab" data-tab="template">Branding &amp; Email</div>
   </div>
 
-  <!-- Quotes -->
   <div id="tab-cotizaciones">
     <div class="card" style="margin-bottom:16px; display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
       <label style="margin:0;">Filter by status:</label>
       <select id="filtroEstado" style="width:auto;">
         <option value="">All</option>
-        <option>New</option>
-        <option>Contacted</option>
-        <option>Quote Sent</option>
-        <option>Closed</option>
-        <option>Lost</option>
+        <option>New</option><option>Contacted</option><option>Quote Sent</option><option>Closed</option><option>Lost</option>
       </select>
     </div>
     <div class="card">
-      <div class="quote-row head">
-        <div>Client</div><div>Event</div><div>Guests</div><div>Total</div><div>Status</div><div></div>
-      </div>
+      <div class="quote-row head"><div>Client</div><div>Event</div><div>Guests</div><div>Total</div><div>Status</div><div></div></div>
       <div id="quoteList"></div>
     </div>
   </div>
 
-  <!-- Menu -->
   <div id="tab-menu" style="display:none;">
     <div class="card" style="margin-bottom:16px;">
       <div class="section-title">Add Menu Item</div>
@@ -74,12 +65,9 @@
       </div>
       <button class="btn btn-primary" id="addMenuBtn">Add to Menu</button>
     </div>
-    <div class="card">
-      <div id="menuAdminList"></div>
-    </div>
+    <div class="card"><div id="menuAdminList"></div></div>
   </div>
 
-  <!-- Email Template -->
   <div id="tab-template" style="display:none;">
     <div class="card" style="margin-bottom:16px;">
       <div class="section-title">Logo</div>
@@ -88,37 +76,39 @@
         <input type="file" id="logoInput" accept="image/*">
         <button class="btn btn-ghost btn-sm" id="removeLogoBtn" style="display:none;">Remove Logo</button>
       </div>
-      <p class="helper-text">Shows at the top of every quote email. Transparent PNG recommended.</p>
+      <p class="helper-text">Shows on your quote form, your dashboard header, and every quote email.</p>
+    </div>
+    <div class="card" style="margin-bottom:16px;">
+      <div class="section-title">Brand Colors</div>
+      <div class="field-row">
+        <div class="field"><label>Primary color (buttons, prices)</label><input type="color" id="tplPrimaryColor" style="height:44px; padding:4px;"></div>
+        <div class="field"><label>Accent color (headings)</label><input type="color" id="tplAccentColor" style="height:44px; padding:4px;"></div>
+      </div>
+      <p class="helper-text">Applied to your quote form, dashboard, and emails.</p>
     </div>
     <div class="card" style="margin-bottom:16px;">
       <div class="section-title">Business Name</div>
       <input type="text" id="tplBusinessName">
-      <p class="helper-text">Used if no logo is uploaded, and as the closing signature.</p>
     </div>
     <div class="card" style="margin-bottom:16px;">
       <div class="section-title">Intro Message</div>
       <textarea id="tplIntro" rows="3"></textarea>
-      <p class="helper-text">Use <code>{clientName}</code> where you want the client's first name to appear.</p>
+      <p class="helper-text">Use <code>{clientName}</code> for the client's first name.</p>
     </div>
     <div class="card" style="margin-bottom:16px;">
       <div class="section-title">Policies (optional)</div>
-      <textarea id="tplPolicies" rows="6" placeholder="e.g. A 30% non-refundable deposit is required to confirm your event. Final guest count due 5 business days before the event. Cancellations..."></textarea>
-      <p class="helper-text">Shown in a highlighted box on every quote email. Leave empty to hide it.</p>
+      <textarea id="tplPolicies" rows="6" placeholder="e.g. A 30% non-refundable deposit is required..."></textarea>
     </div>
     <div class="card" style="margin-bottom:16px;">
       <div class="section-title">Closing Message</div>
       <textarea id="tplFooter" rows="2"></textarea>
     </div>
-    <button class="btn btn-primary" id="saveTemplateBtn">Save Template</button>
+    <button class="btn btn-primary" id="saveTemplateBtn">Save Changes</button>
     <span class="helper-text" id="templateSavedNote" style="margin-left:10px;"></span>
   </div>
 </div>
 
-<!-- Quote detail modal -->
-<div class="overlay" id="detailOverlay" style="display:none;">
-  <div class="modal" id="detailModal"></div>
-</div>
-
+<div class="overlay" id="detailOverlay" style="display:none;"><div class="modal" id="detailModal"></div></div>
 <div id="toastHost"></div>
 
 <script type="module">
@@ -127,9 +117,7 @@ import {
   collection, doc, getDoc, getDocs, addDoc, updateDoc, setDoc, deleteDoc, query, orderBy,
   onSnapshot, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-import {
-  signInWithEmailAndPassword, onAuthStateChanged, signOut
-} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import { signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js";
 import { ref as storageRef, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
@@ -138,14 +126,12 @@ const sendMessageToClient = httpsCallable(functions, "sendMessageToClient");
 const sendStatusUpdateEmail = httpsCallable(functions, "sendStatusUpdateEmail");
 
 const ESTADOS = ["New", "Contacted", "Quote Sent", "Closed", "Lost"];
-const badgeClass = e => ({
-  "New": "badge-nueva", "Contacted": "badge-contactado",
-  "Quote Sent": "badge-enviada", "Closed": "badge-cerrada", "Lost": "badge-perdida"
-}[e] || "badge-nueva");
+const badgeClass = e => ({ "New":"badge-nueva","Contacted":"badge-contactado","Quote Sent":"badge-enviada","Closed":"badge-cerrada","Lost":"badge-perdida" }[e] || "badge-nueva");
 
-let quotes = [];
-let menu = [];
-let currentQuoteId = null;
+let quotes = [], menu = [], currentQuoteId = null, tenantId = null;
+
+function tRef(...segments) { return doc(db, "tenants", tenantId, ...segments); }
+function tCol(...segments) { return collection(db, "tenants", tenantId, ...segments); }
 
 // ---------- Auth ----------
 document.getElementById("loginBtn").addEventListener("click", async () => {
@@ -159,11 +145,36 @@ document.getElementById("loginBtn").addEventListener("click", async () => {
 });
 document.getElementById("logoutBtn").addEventListener("click", () => signOut(auth));
 
-onAuthStateChanged(auth, user => {
-  document.getElementById("loginView").style.display = user ? "none" : "block";
-  document.getElementById("dashView").style.display = user ? "block" : "none";
-  document.getElementById("logoutBtn").style.display = user ? "inline-flex" : "none";
-  if (user) { escucharCotizaciones(); cargarMenuAdmin(); cargarTemplate(); }
+onAuthStateChanged(auth, async (user) => {
+  document.getElementById("loginView").style.display = "none";
+  document.getElementById("suspendedView").style.display = "none";
+  document.getElementById("dashView").style.display = "none";
+  document.getElementById("logoutBtn").style.display = "none";
+
+  if (!user) { document.getElementById("loginView").style.display = "block"; return; }
+
+  const tokenResult = await user.getIdTokenResult(true);
+  tenantId = tokenResult.claims.tenantId || null;
+
+  if (!tenantId) {
+    document.getElementById("loginError").textContent = "This account isn't linked to a restaurant.";
+    document.getElementById("loginView").style.display = "block";
+    await signOut(auth);
+    return;
+  }
+
+  const tenantSnap = await getDoc(doc(db, "tenants", tenantId));
+  if (!tenantSnap.exists() || tenantSnap.data().active === false) {
+    document.getElementById("suspendedView").style.display = "block";
+    await signOut(auth);
+    return;
+  }
+
+  document.getElementById("dashView").style.display = "block";
+  document.getElementById("logoutBtn").style.display = "inline-flex";
+  escucharCotizaciones();
+  cargarMenuAdmin();
+  cargarTemplate();
 });
 
 // ---------- Tabs ----------
@@ -179,8 +190,7 @@ document.querySelectorAll(".tab").forEach(tab => {
 
 // ---------- Quotes ----------
 function escucharCotizaciones() {
-  const q = query(collection(db, "cotizaciones"), orderBy("creadoEn", "desc"));
-  onSnapshot(q, snap => {
+  onSnapshot(query(tCol("cotizaciones"), orderBy("creadoEn", "desc")), snap => {
     quotes = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     renderQuotes();
   });
@@ -215,10 +225,7 @@ function renderQuotes() {
       <div>${q.fechaEvento || "—"}</div>
       <div>${q.numPersonas || "—"}</div>
       <div>$${Number(q.total || 0).toFixed(2)}</div>
-      <div>
-        <span class="badge ${badgeClass(q.estado)}">${q.estado}</span>
-        ${isOverdue(q) ? `<span class="badge" style="background:#C4622D; margin-left:4px;">⏰ Follow up</span>` : ""}
-      </div>
+      <div><span class="badge ${badgeClass(q.estado)}">${q.estado}</span>${isOverdue(q) ? `<span class="badge" style="background:#C4622D; margin-left:4px;">⏰ Follow up</span>` : ""}</div>
       <div style="display:flex; gap:6px;">
         <button class="btn btn-ghost btn-sm view-btn" data-id="${q.id}">View</button>
         <button class="btn btn-ghost btn-sm del-quote-btn" data-id="${q.id}">Delete</button>
@@ -226,14 +233,11 @@ function renderQuotes() {
     </div>
   `).join("");
 
-  list.querySelectorAll(".view-btn").forEach(btn => {
-    btn.addEventListener("click", () => abrirDetalle(btn.dataset.id));
-  });
-
+  list.querySelectorAll(".view-btn").forEach(btn => btn.addEventListener("click", () => abrirDetalle(btn.dataset.id)));
   list.querySelectorAll(".del-quote-btn").forEach(btn => {
     btn.addEventListener("click", async () => {
       if (confirm("Delete this quote? This can't be undone.")) {
-        await deleteDoc(doc(db, "cotizaciones", btn.dataset.id));
+        await deleteDoc(tRef("cotizaciones", btn.dataset.id));
         mostrarToast("Quote deleted");
       }
     });
@@ -250,47 +254,28 @@ async function abrirDetalle(id) {
     <div class="section-title">Quote for ${q.clienteNombre}</div>
     <p class="helper-text">${q.clienteEmail} · ${q.clienteTelefono}</p>
     <p><strong>Event:</strong> ${q.fechaEvento || "—"} ${q.lugar ? `· ${q.lugar}` : ""}</p>
-
-    <div class="field">
-      <label>Number of guests</label>
-      <input type="number" id="editPersonas" min="1" value="${q.numPersonas}">
-    </div>
-
-    <div class="section-title" style="margin-top:4px;">Menu (check what's included in the quote)</div>
+    <div class="field"><label>Number of guests</label><input type="number" id="editPersonas" min="1" value="${q.numPersonas}"></div>
+    <div class="section-title" style="margin-top:4px;">Menu (check what's included)</div>
     <div id="editMenuList"><p class="helper-text">Loading menu…</p></div>
-
     <div class="ticket" style="position:static; margin-top:12px;">
       <h4>Total</h4>
       <div class="line total-line"><span>Updated total</span><span id="editTotalPreview">$${Number(q.total||0).toFixed(2)}</span></div>
     </div>
-
     ${q.notas ? `<p style="margin-top:12px;"><strong>Client notes:</strong> ${q.notas}</p>` : ""}
-
     <div class="field" style="margin-top:16px;">
       <label>Status</label>
-      <select id="estadoSelect">
-        ${ESTADOS.map(e => `<option ${e === q.estado ? "selected" : ""}>${e}</option>`).join("")}
-      </select>
+      <select id="estadoSelect">${ESTADOS.map(e => `<option ${e === q.estado ? "selected" : ""}>${e}</option>`).join("")}</select>
     </div>
     <label style="display:flex; align-items:center; gap:6px; font-weight:400; margin-bottom:16px;">
-      <input type="checkbox" id="notificarCliente" style="width:auto;" checked>
-      Resend the updated quote to the client by email
+      <input type="checkbox" id="notificarCliente" style="width:auto;" checked> Resend the updated quote to the client by email
     </label>
-
     <div class="section-title">Messages</div>
     <div class="msg-thread" id="msgThread"><p class="helper-text">Loading…</p></div>
-    <div class="field">
-      <textarea id="nuevoMensaje" rows="2" placeholder="Write a message for the client…"></textarea>
-    </div>
+    <div class="field"><textarea id="nuevoMensaje" rows="2" placeholder="Write a message for the client…"></textarea></div>
     <label style="display:flex; align-items:center; gap:6px; font-weight:400; margin-bottom:10px;">
-      <input type="checkbox" id="incluirCotizacion" style="width:auto;">
-      Include the current quote summary (menu selected above) in this email
+      <input type="checkbox" id="incluirCotizacion" style="width:auto;"> Include the current quote summary in this email
     </label>
-    <div class="field">
-      <label style="font-weight:400;">Attach a file (optional)</label>
-      <input type="file" id="adjuntoInput">
-      <p class="helper-text" id="adjuntoStatus"></p>
-    </div>
+    <div class="field"><label style="font-weight:400;">Attach a file (optional)</label><input type="file" id="adjuntoInput"><p class="helper-text" id="adjuntoStatus"></p></div>
     <div style="display:flex; gap:10px; justify-content:flex-end;">
       <button class="btn btn-ghost btn-sm" id="closeModalBtn">Close</button>
       <button class="btn btn-ghost btn-sm" id="sendMsgBtn">Send Message</button>
@@ -299,9 +284,7 @@ async function abrirDetalle(id) {
   `;
 
   document.getElementById("detailOverlay").style.display = "flex";
-  document.getElementById("closeModalBtn").addEventListener("click", () => {
-    document.getElementById("detailOverlay").style.display = "none";
-  });
+  document.getElementById("closeModalBtn").addEventListener("click", () => { document.getElementById("detailOverlay").style.display = "none"; });
 
   renderEditMenu(q);
 
@@ -309,36 +292,22 @@ async function abrirDetalle(id) {
     const nuevoEstado = document.getElementById("estadoSelect").value;
     const notificar = document.getElementById("notificarCliente").checked;
     const numPersonas = parseInt(document.getElementById("editPersonas").value, 10) || q.numPersonas;
-
     const checked = Array.from(document.querySelectorAll(".edit-menu-checkbox:checked"));
     if (checked.length === 0) { alert("The quote needs at least one menu item."); return; }
 
-    const items = checked.map(chk => ({
-      menuId: chk.dataset.id,
-      nombre: chk.dataset.nombre,
-      precio: parseFloat(chk.dataset.precio),
-      cantidad: 1
-    }));
+    const items = checked.map(chk => ({ menuId: chk.dataset.id, nombre: chk.dataset.nombre, precio: parseFloat(chk.dataset.precio), cantidad: 1 }));
     const total = items.reduce((sum, i) => sum + i.precio * i.cantidad * numPersonas, 0);
 
-    const updateData = {
-      estado: nuevoEstado, numPersonas, items, total, actualizadoEn: serverTimestamp()
-    };
-    // Every time a quote is (re)marked as "Contacted" or "Quote Sent",
-    // reset the 2-day follow-up clock. Closed/Lost quotes never get reminders.
+    const updateData = { estado: nuevoEstado, numPersonas, items, total, actualizadoEn: serverTimestamp() };
     if (nuevoEstado === "Contacted" || nuevoEstado === "Quote Sent") {
       updateData.fechaContactado = serverTimestamp();
       updateData.recordatorioEnviado = false;
     }
 
     const saveBtn = document.getElementById("saveEstadoBtn");
-    saveBtn.disabled = true;
-    saveBtn.textContent = "Saving…";
-
-    await updateDoc(doc(db, "cotizaciones", id), updateData);
-    if (notificar) {
-      try { await sendStatusUpdateEmail({ quoteId: id, nuevoEstado }); } catch (e) { console.error(e); }
-    }
+    saveBtn.disabled = true; saveBtn.textContent = "Saving…";
+    await updateDoc(tRef("cotizaciones", id), updateData);
+    if (notificar) { try { await sendStatusUpdateEmail({ tenantId, quoteId: id, nuevoEstado }); } catch (e) { console.error(e); } }
     mostrarToast("Quote updated");
     document.getElementById("detailOverlay").style.display = "none";
   });
@@ -353,14 +322,11 @@ async function abrirDetalle(id) {
     const btn = document.getElementById("sendMsgBtn");
     const statusEl = document.getElementById("adjuntoStatus");
     btn.disabled = true;
-
     try {
-      let adjuntoUrl = null;
-      let adjuntoNombre = null;
-
+      let adjuntoUrl = null, adjuntoNombre = null;
       if (file) {
         statusEl.textContent = "Uploading file…";
-        const path = `adjuntos/${id}/${Date.now()}_${file.name}`;
+        const path = `tenants/${tenantId}/adjuntos/${id}/${Date.now()}_${file.name}`;
         const fileRef = storageRef(storage, path);
         await uploadBytes(fileRef, file);
         adjuntoUrl = await getDownloadURL(fileRef);
@@ -377,12 +343,11 @@ async function abrirDetalle(id) {
         cotizacion = { items, numPersonas, total };
       }
 
-      await addDoc(collection(db, "cotizaciones", id, "mensajes"), {
-        autor: "owner",
-        texto: texto || (incluirCotizacion ? "(quote summary attached)" : "(attachment)"),
+      await addDoc(tCol("cotizaciones", id, "mensajes"), {
+        autor: "owner", texto: texto || (incluirCotizacion ? "(quote summary attached)" : "(attachment)"),
         adjuntoUrl, adjuntoNombre, fecha: serverTimestamp()
       });
-      await sendMessageToClient({ quoteId: id, texto, adjuntoUrl, adjuntoNombre, cotizacion });
+      await sendMessageToClient({ tenantId, quoteId: id, texto, adjuntoUrl, adjuntoNombre, cotizacion });
 
       document.getElementById("nuevoMensaje").value = "";
       document.getElementById("incluirCotizacion").checked = false;
@@ -402,18 +367,13 @@ function renderEditMenu(q) {
   const list = document.getElementById("editMenuList");
   if (!list) return;
   if (menu.length === 0) { list.innerHTML = `<p class="helper-text">No menu items yet.</p>`; return; }
-
   const selectedIds = new Set((q.items || []).map(i => i.menuId));
   list.innerHTML = menu.map(item => `
     <label class="menu-item" style="cursor:pointer;">
-      <div class="info">
-        <div class="name">${item.nombre} <span class="helper-text">(${item.categoria || "Menu"})</span></div>
-        <div class="price">$${Number(item.precio).toFixed(2)} / person</div>
-      </div>
+      <div class="info"><div class="name">${item.nombre} <span class="helper-text">(${item.categoria || "Menu"})</span></div><div class="price">$${Number(item.precio).toFixed(2)} / person</div></div>
       <input type="checkbox" class="edit-menu-checkbox" data-id="${item.id}" data-nombre="${item.nombre}" data-precio="${item.precio}" ${selectedIds.has(item.id) ? "checked" : ""} style="width:24px; height:24px; accent-color: var(--terracotta); flex-shrink:0;">
     </label>
   `).join("");
-
   list.querySelectorAll(".edit-menu-checkbox").forEach(chk => chk.addEventListener("change", recalcularEditTotal));
   const personasInput = document.getElementById("editPersonas");
   if (personasInput) personasInput.addEventListener("input", recalcularEditTotal);
@@ -425,69 +385,46 @@ function recalcularEditTotal() {
   const totalEl = document.getElementById("editTotalPreview");
   if (!personasInput || !totalEl) return;
   const personas = parseInt(personasInput.value, 10) || 0;
-  const checked = document.querySelectorAll(".edit-menu-checkbox:checked");
   let total = 0;
-  checked.forEach(chk => { total += parseFloat(chk.dataset.precio) * personas; });
+  document.querySelectorAll(".edit-menu-checkbox:checked").forEach(chk => { total += parseFloat(chk.dataset.precio) * personas; });
   totalEl.textContent = `$${total.toFixed(2)}`;
 }
 
 function escucharMensajes(id) {
-  const q = query(collection(db, "cotizaciones", id, "mensajes"), orderBy("fecha", "asc"));
-  onSnapshot(q, snap => {
+  onSnapshot(query(tCol("cotizaciones", id, "mensajes"), orderBy("fecha", "asc")), snap => {
     const thread = document.getElementById("msgThread");
     if (!thread) return;
     if (snap.empty) { thread.innerHTML = `<p class="helper-text">No messages yet.</p>`; return; }
     thread.innerHTML = snap.docs.map(d => {
       const m = d.data();
-      const adjunto = m.adjuntoUrl
-        ? `<br><a href="${m.adjuntoUrl}" target="_blank" style="color:inherit; text-decoration:underline;">📎 ${m.adjuntoNombre || "View attachment"}</a>`
-        : "";
-      return `<div class="msg msg-${m.autor === "owner" || m.autor === "dueño" ? "owner" : "client"}">${m.texto}${adjunto}</div>`;
+      const adjunto = m.adjuntoUrl ? `<br><a href="${m.adjuntoUrl}" target="_blank" style="color:inherit; text-decoration:underline;">📎 ${m.adjuntoNombre || "View attachment"}</a>` : "";
+      return `<div class="msg msg-${m.autor === "owner" ? "owner" : "client"}">${m.texto}${adjunto}</div>`;
     }).join("");
     thread.scrollTop = thread.scrollHeight;
   });
 }
 
-// ---------- Menu (admin) ----------
+// ---------- Menu ----------
 async function cargarMenuAdmin() {
-  const q = query(collection(db, "menu"));
-  onSnapshot(q, snap => {
-    menu = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-    renderMenuAdmin();
-  });
+  onSnapshot(query(tCol("menu")), snap => { menu = snap.docs.map(d => ({ id: d.id, ...d.data() })); renderMenuAdmin(); });
 }
 
 function renderMenuAdmin() {
   const list = document.getElementById("menuAdminList");
-  if (menu.length === 0) {
-    list.innerHTML = `<p class="helper-text">You haven't added any menu items yet.</p>`;
-    return;
-  }
+  if (menu.length === 0) { list.innerHTML = `<p class="helper-text">You haven't added any menu items yet.</p>`; return; }
   list.innerHTML = menu.map(item => `
     <div class="menu-item" id="menu-row-${item.id}">
-      <div class="info">
-        <div class="name">${item.nombre} <span class="helper-text">(${item.categoria || "Menu"})</span></div>
-        ${item.descripcion ? `<div class="desc">${item.descripcion}</div>` : ""}
-        <div class="price">$${Number(item.precio).toFixed(2)} / person</div>
-      </div>
+      <div class="info"><div class="name">${item.nombre} <span class="helper-text">(${item.categoria || "Menu"})</span></div>
+      ${item.descripcion ? `<div class="desc">${item.descripcion}</div>` : ""}
+      <div class="price">$${Number(item.precio).toFixed(2)} / person</div></div>
       <div style="display:flex; gap:8px; flex-shrink:0;">
         <button class="btn btn-ghost btn-sm edit-menu-btn" data-id="${item.id}">Edit</button>
         <button class="btn btn-ghost btn-sm del-menu-btn" data-id="${item.id}">Delete</button>
       </div>
     </div>
   `).join("");
-
-  list.querySelectorAll(".del-menu-btn").forEach(btn => {
-    btn.addEventListener("click", async () => {
-      if (confirm("Delete this menu item?")) {
-        await deleteDoc(doc(db, "menu", btn.dataset.id));
-      }
-    });
-  });
-
-  list.querySelectorAll(".edit-menu-btn").forEach(btn => {
-    btn.addEventListener("click", () => abrirEdicionMenuItem(btn.dataset.id));
-  });
+  list.querySelectorAll(".del-menu-btn").forEach(btn => btn.addEventListener("click", async () => { if (confirm("Delete this menu item?")) await deleteDoc(tRef("menu", btn.dataset.id)); }));
+  list.querySelectorAll(".edit-menu-btn").forEach(btn => btn.addEventListener("click", () => abrirEdicionMenuItem(btn.dataset.id)));
 }
 
 function abrirEdicionMenuItem(id) {
@@ -518,7 +455,7 @@ function abrirEdicionMenuItem(id) {
     const precio = parseFloat(document.getElementById(`editPrice-${id}`).value);
     const descripcion = document.getElementById(`editDesc-${id}`).value.trim();
     if (!nombre || isNaN(precio)) { alert("Name and price are required."); return; }
-    await updateDoc(doc(db, "menu", id), { categoria: categoria || "Menu", nombre, precio, descripcion: descripcion || null });
+    await updateDoc(tRef("menu", id), { categoria: categoria || "Menu", nombre, precio, descripcion: descripcion || null });
     mostrarToast("Menu item updated");
   });
 }
@@ -528,13 +465,8 @@ document.getElementById("addMenuBtn").addEventListener("click", async () => {
   const nombre = document.getElementById("mNombre").value.trim();
   const precio = parseFloat(document.getElementById("mPrecio").value);
   const descripcion = document.getElementById("mDescripcion").value.trim();
-
   if (!nombre || isNaN(precio)) { alert("Please fill in at least the name and price."); return; }
-
-  await addDoc(collection(db, "menu"), {
-    categoria: categoria || "Menu", nombre, precio, descripcion: descripcion || null, activo: true
-  });
-
+  await addDoc(tCol("menu"), { categoria: categoria || "Menu", nombre, precio, descripcion: descripcion || null, activo: true });
   document.getElementById("mCategoria").value = "";
   document.getElementById("mNombre").value = "";
   document.getElementById("mPrecio").value = "";
@@ -542,56 +474,71 @@ document.getElementById("addMenuBtn").addEventListener("click", async () => {
   mostrarToast("Menu item added");
 });
 
-// ---------- Email Template ----------
+// ---------- Branding & Email Template ----------
 const DEFAULT_TEMPLATE = {
-  businessName: "So Italian Catering",
+  businessName: "Our Restaurant",
   introText: "Hi {clientName}, thanks for your interest! Here's a preliminary summary of your quote:",
   policiesText: "",
   footerText: "Thank you for considering us for your event!",
-  logoUrl: null
+  logoUrl: null,
+  primaryColor: "#C4622D",
+  accentColor: "#33482E"
 };
 let currentTemplate = { ...DEFAULT_TEMPLATE };
 
 async function cargarTemplate() {
-  const snap = await getDoc(doc(db, "settings", "quoteEmail"));
+  const snap = await getDoc(tRef("settings", "quoteEmail"));
   currentTemplate = snap.exists() ? { ...DEFAULT_TEMPLATE, ...snap.data() } : { ...DEFAULT_TEMPLATE };
   document.getElementById("tplBusinessName").value = currentTemplate.businessName;
   document.getElementById("tplIntro").value = currentTemplate.introText;
   document.getElementById("tplPolicies").value = currentTemplate.policiesText;
   document.getElementById("tplFooter").value = currentTemplate.footerText;
+  document.getElementById("tplPrimaryColor").value = currentTemplate.primaryColor;
+  document.getElementById("tplAccentColor").value = currentTemplate.accentColor;
   renderLogoPreview();
+  applyBrandingToDashboard();
 }
 
 function renderLogoPreview() {
   const el = document.getElementById("logoPreview");
   const removeBtn = document.getElementById("removeLogoBtn");
-  if (!el) return;
   if (currentTemplate.logoUrl) {
     el.innerHTML = `<img src="${currentTemplate.logoUrl}" style="max-height:80px; display:block;">`;
-    if (removeBtn) removeBtn.style.display = "inline-flex";
+    removeBtn.style.display = "inline-flex";
   } else {
     el.innerHTML = `<p class="helper-text">No logo uploaded yet — the business name will be used instead.</p>`;
-    if (removeBtn) removeBtn.style.display = "none";
+    removeBtn.style.display = "none";
   }
 }
 
-document.getElementById("removeLogoBtn").addEventListener("click", async () => {
-  if (!confirm("Remove the logo? Emails will show your business name instead until you upload a new one.")) return;
-  currentTemplate.logoUrl = null;
-  renderLogoPreview();
-  await setDoc(doc(db, "settings", "quoteEmail"), currentTemplate, { merge: true });
-  mostrarToast("Logo removed");
-});
+function applyBrandingToDashboard() {
+  const header = document.getElementById("brandHeader");
+  header.innerHTML = currentTemplate.logoUrl
+    ? `<img src="${currentTemplate.logoUrl}" alt="${currentTemplate.businessName}" style="max-height:36px; display:block;">`
+    : `${currentTemplate.businessName}<small>Admin Dashboard</small>`;
+  let style = document.getElementById("brandColorStyle");
+  if (!style) { style = document.createElement("style"); style.id = "brandColorStyle"; document.head.appendChild(style); }
+  style.textContent = `:root { --terracotta: ${currentTemplate.primaryColor}; --terracotta-dark: ${currentTemplate.primaryColor}; --basil: ${currentTemplate.accentColor}; --basil-dark: ${currentTemplate.accentColor}; }`;
+}
 
 document.getElementById("logoInput").addEventListener("change", async (e) => {
   const file = e.target.files[0];
   if (!file) return;
-  const path = `branding/logo_${Date.now()}_${file.name}`;
+  const path = `tenants/${tenantId}/branding/logo_${Date.now()}_${file.name}`;
   const fileRef = storageRef(storage, path);
   await uploadBytes(fileRef, file);
   currentTemplate.logoUrl = await getDownloadURL(fileRef);
   renderLogoPreview();
-  mostrarToast("Logo uploaded — click Save Template to apply it");
+  mostrarToast("Logo uploaded — click Save Changes to apply it");
+});
+
+document.getElementById("removeLogoBtn").addEventListener("click", async () => {
+  if (!confirm("Remove the logo? Your business name will be shown instead.")) return;
+  currentTemplate.logoUrl = null;
+  renderLogoPreview();
+  await setDoc(tRef("settings", "quoteEmail"), currentTemplate, { merge: true });
+  applyBrandingToDashboard();
+  mostrarToast("Logo removed");
 });
 
 document.getElementById("saveTemplateBtn").addEventListener("click", async () => {
@@ -600,20 +547,22 @@ document.getElementById("saveTemplateBtn").addEventListener("click", async () =>
     introText: document.getElementById("tplIntro").value.trim() || DEFAULT_TEMPLATE.introText,
     policiesText: document.getElementById("tplPolicies").value.trim(),
     footerText: document.getElementById("tplFooter").value.trim() || DEFAULT_TEMPLATE.footerText,
-    logoUrl: currentTemplate.logoUrl || null
+    logoUrl: currentTemplate.logoUrl || null,
+    primaryColor: document.getElementById("tplPrimaryColor").value,
+    accentColor: document.getElementById("tplAccentColor").value
   };
-  await setDoc(doc(db, "settings", "quoteEmail"), data, { merge: true });
+  await setDoc(tRef("settings", "quoteEmail"), data, { merge: true });
   currentTemplate = data;
-  mostrarToast("Template saved");
-  document.getElementById("templateSavedNote").textContent = "Applies to every quote email sent from now on.";
+  applyBrandingToDashboard();
+  mostrarToast("Saved");
+  document.getElementById("templateSavedNote").textContent = "Applies to your quote form, dashboard, and emails.";
   setTimeout(() => { document.getElementById("templateSavedNote").textContent = ""; }, 4000);
 });
 
 function mostrarToast(msg) {
   const host = document.getElementById("toastHost");
   const t = document.createElement("div");
-  t.className = "toast";
-  t.textContent = msg;
+  t.className = "toast"; t.textContent = msg;
   host.appendChild(t);
   setTimeout(() => t.remove(), 2500);
 }
