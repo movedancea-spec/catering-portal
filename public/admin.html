@@ -87,7 +87,7 @@
 <div id="toastHost"></div>
 
 <script type="module">
-import { db, auth } from "./js/firebase-config.js";
+import { db, auth, storage } from "./js/firebase-config.js";
 import {
   collection, doc, getDocs, addDoc, updateDoc, deleteDoc, query, orderBy,
   onSnapshot, serverTimestamp
@@ -96,6 +96,7 @@ import {
   signInWithEmailAndPassword, onAuthStateChanged, signOut
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js";
+import { ref as storageRef, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
 const functions = getFunctions();
 const sendMessageToClient = httpsCallable(functions, "sendMessageToClient");
@@ -186,12 +187,21 @@ async function abrirDetalle(id) {
   modal.innerHTML = `
     <div class="section-title">Cotización de ${q.clienteNombre}</div>
     <p class="helper-text">${q.clienteEmail} · ${q.clienteTelefono}</p>
-    <p><strong>Evento:</strong> ${q.fechaEvento || "—"} — ${q.numPersonas} personas ${q.lugar ? `· ${q.lugar}` : ""}</p>
-    <div class="ticket" style="position:static;">
-      <h4>Detalle</h4>
-      <div>${(q.items || []).map(i => `<div class="line"><span>${i.nombre} × ${i.cantidad}</span><span>Q${(i.precio*i.cantidad*q.numPersonas).toFixed(2)}</span></div>`).join("")}</div>
-      <div class="line total-line"><span>Total</span><span>Q${Number(q.total||0).toFixed(2)}</span></div>
+    <p><strong>Evento:</strong> ${q.fechaEvento || "—"} ${q.lugar ? `· ${q.lugar}` : ""}</p>
+
+    <div class="field">
+      <label>Número de personas</label>
+      <input type="number" id="editPersonas" min="1" value="${q.numPersonas}">
     </div>
+
+    <div class="section-title" style="margin-top:4px;">Menú (marcá lo que incluye la cotización)</div>
+    <div id="editMenuList"><p class="helper-text">Cargando menú…</p></div>
+
+    <div class="ticket" style="position:static; margin-top:12px;">
+      <h4>Total</h4>
+      <div class="line total-line"><span>Total actualizado</span><span id="editTotalPreview">Q${Number(q.total||0).toFixed(2)}</span></div>
+    </div>
+
     ${q.notas ? `<p style="margin-top:12px;"><strong>Notas del cliente:</strong> ${q.notas}</p>` : ""}
 
     <div class="field" style="margin-top:16px;">
@@ -202,7 +212,7 @@ async function abrirDetalle(id) {
     </div>
     <label style="display:flex; align-items:center; gap:6px; font-weight:400; margin-bottom:16px;">
       <input type="checkbox" id="notificarCliente" style="width:auto;" checked>
-      Avisar al cliente por correo del cambio de estado
+      Reenviar la cotización actualizada al cliente por correo
     </label>
 
     <div class="section-title">Mensajes</div>
@@ -210,10 +220,15 @@ async function abrirDetalle(id) {
     <div class="field">
       <textarea id="nuevoMensaje" rows="2" placeholder="Escribí un mensaje para el cliente…"></textarea>
     </div>
+    <div class="field">
+      <label style="font-weight:400;">Adjuntar archivo (opcional)</label>
+      <input type="file" id="adjuntoInput">
+      <p class="helper-text" id="adjuntoStatus"></p>
+    </div>
     <div style="display:flex; gap:10px; justify-content:flex-end;">
       <button class="btn btn-ghost btn-sm" id="closeModalBtn">Cerrar</button>
       <button class="btn btn-ghost btn-sm" id="sendMsgBtn">Enviar mensaje</button>
-      <button class="btn btn-primary btn-sm" id="saveEstadoBtn">Guardar estado</button>
+      <button class="btn btn-primary btn-sm" id="saveEstadoBtn">Guardar cambios</button>
     </div>
   `;
 
@@ -222,28 +237,69 @@ async function abrirDetalle(id) {
     document.getElementById("detailOverlay").style.display = "none";
   });
 
+  renderEditMenu(q);
+
   document.getElementById("saveEstadoBtn").addEventListener("click", async () => {
     const nuevoEstado = document.getElementById("estadoSelect").value;
     const notificar = document.getElementById("notificarCliente").checked;
-    await updateDoc(doc(db, "cotizaciones", id), { estado: nuevoEstado, actualizadoEn: serverTimestamp() });
+    const numPersonas = parseInt(document.getElementById("editPersonas").value, 10) || q.numPersonas;
+
+    const checked = Array.from(document.querySelectorAll(".edit-menu-checkbox:checked"));
+    if (checked.length === 0) { alert("La cotización necesita al menos un platillo."); return; }
+
+    const items = checked.map(chk => ({
+      menuId: chk.dataset.id,
+      nombre: chk.dataset.nombre,
+      precio: parseFloat(chk.dataset.precio),
+      cantidad: 1
+    }));
+    const total = items.reduce((sum, i) => sum + i.precio * i.cantidad * numPersonas, 0);
+
+    const saveBtn = document.getElementById("saveEstadoBtn");
+    saveBtn.disabled = true;
+    saveBtn.textContent = "Guardando…";
+
+    await updateDoc(doc(db, "cotizaciones", id), {
+      estado: nuevoEstado, numPersonas, items, total, actualizadoEn: serverTimestamp()
+    });
     if (notificar) {
       try { await sendStatusUpdateEmail({ quoteId: id, nuevoEstado }); } catch (e) { console.error(e); }
     }
-    mostrarToast("Estado actualizado");
+    mostrarToast("Cotización actualizada");
     document.getElementById("detailOverlay").style.display = "none";
   });
 
   document.getElementById("sendMsgBtn").addEventListener("click", async () => {
     const texto = document.getElementById("nuevoMensaje").value.trim();
-    if (!texto) return;
+    const fileInput = document.getElementById("adjuntoInput");
+    const file = fileInput.files[0];
+    if (!texto && !file) return;
+
     const btn = document.getElementById("sendMsgBtn");
+    const statusEl = document.getElementById("adjuntoStatus");
     btn.disabled = true;
+
     try {
+      let adjuntoUrl = null;
+      let adjuntoNombre = null;
+
+      if (file) {
+        statusEl.textContent = "Subiendo archivo…";
+        const path = `adjuntos/${id}/${Date.now()}_${file.name}`;
+        const fileRef = storageRef(storage, path);
+        await uploadBytes(fileRef, file);
+        adjuntoUrl = await getDownloadURL(fileRef);
+        adjuntoNombre = file.name;
+        statusEl.textContent = "";
+      }
+
       await addDoc(collection(db, "cotizaciones", id, "mensajes"), {
-        autor: "dueño", texto, fecha: serverTimestamp()
+        autor: "dueño", texto: texto || "(archivo adjunto)", adjuntoUrl, adjuntoNombre, fecha: serverTimestamp()
       });
-      await sendMessageToClient({ quoteId: id, texto });
+      await sendMessageToClient({ quoteId: id, texto, adjuntoUrl, adjuntoNombre });
+
       document.getElementById("nuevoMensaje").value = "";
+      fileInput.value = "";
       mostrarToast("Mensaje enviado por correo");
     } catch (e) {
       console.error(e);
@@ -255,6 +311,39 @@ async function abrirDetalle(id) {
   escucharMensajes(id);
 }
 
+function renderEditMenu(q) {
+  const list = document.getElementById("editMenuList");
+  if (!list) return;
+  if (menu.length === 0) { list.innerHTML = `<p class="helper-text">No hay platillos cargados en el menú todavía.</p>`; return; }
+
+  const selectedIds = new Set((q.items || []).map(i => i.menuId));
+  list.innerHTML = menu.map(item => `
+    <label class="menu-item" style="cursor:pointer;">
+      <div class="info">
+        <div class="name">${item.nombre} <span class="helper-text">(${item.categoria || "Menú"})</span></div>
+        <div class="price">Q${Number(item.precio).toFixed(2)} / persona</div>
+      </div>
+      <input type="checkbox" class="edit-menu-checkbox" data-id="${item.id}" data-nombre="${item.nombre}" data-precio="${item.precio}" ${selectedIds.has(item.id) ? "checked" : ""} style="width:24px; height:24px; accent-color: var(--terracotta); flex-shrink:0;">
+    </label>
+  `).join("");
+
+  list.querySelectorAll(".edit-menu-checkbox").forEach(chk => chk.addEventListener("change", recalcularEditTotal));
+  const personasInput = document.getElementById("editPersonas");
+  if (personasInput) personasInput.addEventListener("input", recalcularEditTotal);
+  recalcularEditTotal();
+}
+
+function recalcularEditTotal() {
+  const personasInput = document.getElementById("editPersonas");
+  const totalEl = document.getElementById("editTotalPreview");
+  if (!personasInput || !totalEl) return;
+  const personas = parseInt(personasInput.value, 10) || 0;
+  const checked = document.querySelectorAll(".edit-menu-checkbox:checked");
+  let total = 0;
+  checked.forEach(chk => { total += parseFloat(chk.dataset.precio) * personas; });
+  totalEl.textContent = `Q${total.toFixed(2)}`;
+}
+
 function escucharMensajes(id) {
   const q = query(collection(db, "cotizaciones", id, "mensajes"), orderBy("fecha", "asc"));
   onSnapshot(q, snap => {
@@ -263,7 +352,10 @@ function escucharMensajes(id) {
     if (snap.empty) { thread.innerHTML = `<p class="helper-text">Sin mensajes todavía.</p>`; return; }
     thread.innerHTML = snap.docs.map(d => {
       const m = d.data();
-      return `<div class="msg msg-${m.autor === "dueño" ? "dueño" : "cliente"}">${m.texto}</div>`;
+      const adjunto = m.adjuntoUrl
+        ? `<br><a href="${m.adjuntoUrl}" target="_blank" style="color:inherit; text-decoration:underline;">📎 ${m.adjuntoNombre || "Ver adjunto"}</a>`
+        : "";
+      return `<div class="msg msg-${m.autor === "dueño" ? "dueño" : "cliente"}">${m.texto}${adjunto}</div>`;
     }).join("");
     thread.scrollTop = thread.scrollHeight;
   });

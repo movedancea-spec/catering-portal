@@ -21,7 +21,7 @@ const FROM_EMAIL = "So Italian Catering <onboarding@resend.dev>";
 // Poné aquí el correo con el que te registraste en Resend — ahí es donde
 // vas a recibir el aviso de "nueva cotización", y también el único correo
 // al que le podés mandar la pre-cotización de prueba mientras estés en modo demo.
-const OWNER_EMAIL = "tucorreo@resend.com";
+const OWNER_EMAIL = "movedancea@gmail.com";
 
 async function enviarCorreo({ to, subject, html, apiKey }) {
   const res = await fetch("https://api.resend.com/emails", {
@@ -106,16 +106,20 @@ exports.sendMessageToClient = onCall(
   { secrets: [RESEND_API_KEY] },
   async (request) => {
     if (!request.auth) throw new Error("No autorizado");
-    const { quoteId, texto } = request.data;
+    const { quoteId, texto, adjuntoUrl, adjuntoNombre } = request.data;
 
     const snap = await db.collection("cotizaciones").doc(quoteId).get();
     if (!snap.exists) throw new Error("Cotización no encontrada");
     const q = snap.data();
 
+    const adjuntoHtml = adjuntoUrl
+      ? `<p><a href="${adjuntoUrl}" style="color:#33482E; font-weight:bold;">📎 Ver archivo adjunto${adjuntoNombre ? `: ${adjuntoNombre}` : ""}</a></p>`
+      : "";
+
     await enviarCorreo({
       to: q.clienteEmail,
       subject: `Nuevo mensaje sobre tu cotización — So Italian Catering`,
-      html: `<div style="font-family:sans-serif;"><p>Hola ${q.clienteNombre},</p><p>${texto}</p><p>— So Italian Catering</p></div>`,
+      html: `<div style="font-family:sans-serif;"><p>Hola ${q.clienteNombre},</p><p>${texto || ""}</p>${adjuntoHtml}<p>— So Italian Catering</p></div>`,
       apiKey: RESEND_API_KEY.value()
     });
 
@@ -132,14 +136,33 @@ exports.sendStatusUpdateEmail = onCall(
     if (!request.auth) throw new Error("No autorizado");
     const { quoteId, nuevoEstado } = request.data;
 
+    // Se lee DESPUÉS de que el panel ya guardó los cambios en Firestore,
+    // así que esto refleja el menú/total/personas más actuales.
     const snap = await db.collection("cotizaciones").doc(quoteId).get();
     if (!snap.exists) throw new Error("Cotización no encontrada");
     const q = snap.data();
 
+    const html = `
+      <div style="font-family:sans-serif; color:#2B2119;">
+        <h2 style="color:#33482E;">So Italian Catering</h2>
+        <p>Hola ${q.clienteNombre}, tu cotización fue actualizada. Este es el resumen más reciente:</p>
+        <p><strong>Fecha del evento:</strong> ${q.fechaEvento}<br>
+           <strong>Número de personas:</strong> ${q.numPersonas}<br>
+           <strong>Estado:</strong> ${nuevoEstado}</p>
+        <table style="width:100%; border-collapse:collapse; margin:12px 0;">
+          ${itemsHtml(q.items, q.numPersonas)}
+          <tr><td style="padding:8px; font-weight:bold; border-top:2px solid #33482E;">Total actualizado</td>
+              <td style="padding:8px; font-weight:bold; text-align:right; border-top:2px solid #33482E;">${fmtQ(q.total)}</td></tr>
+        </table>
+        <p>Cualquier duda, respondé este correo o escribinos por este medio.</p>
+        <p>— So Italian Catering</p>
+      </div>
+    `;
+
     await enviarCorreo({
       to: q.clienteEmail,
-      subject: `Actualización de tu cotización — So Italian Catering`,
-      html: `<div style="font-family:sans-serif;"><p>Hola ${q.clienteNombre},</p><p>El estado de tu cotización para el evento del ${q.fechaEvento} cambió a: <strong>${nuevoEstado}</strong>.</p><p>— So Italian Catering</p></div>`,
+      subject: `Tu cotización fue actualizada — So Italian Catering`,
+      html,
       apiKey: RESEND_API_KEY.value()
     });
 

@@ -111,30 +111,21 @@ async function cargarMenu() {
       <div class="menu-category">
         <h3>${cat}</h3>
         ${items.map(item => `
-          <div class="menu-item">
+          <label class="menu-item" for="chk-${item.id}" style="cursor:pointer;">
             <div class="info">
               <div class="name">${item.nombre}</div>
               ${item.descripcion ? `<div class="desc">${item.descripcion}</div>` : ""}
               <div class="price">Q${Number(item.precio).toFixed(2)} / persona</div>
             </div>
-            <div class="qty-control">
-              <button type="button" data-id="${item.id}" data-dir="-1">−</button>
-              <span class="qty-val" id="qty-${item.id}">0</span>
-              <button type="button" data-id="${item.id}" data-dir="1">+</button>
-            </div>
-          </div>
+            <input type="checkbox" class="menu-checkbox" id="chk-${item.id}" data-id="${item.id}" style="width:24px; height:24px; accent-color: var(--terracotta); flex-shrink:0;">
+          </label>
         `).join("")}
       </div>
     `).join("");
 
-    container.querySelectorAll("button[data-id]").forEach(btn => {
-      btn.addEventListener("click", () => {
-        const id = btn.dataset.id;
-        const dir = parseInt(btn.dataset.dir, 10);
-        const current = selected[id] || 0;
-        const next = Math.max(0, current + dir);
-        selected[id] = next;
-        document.getElementById(`qty-${id}`).textContent = next;
+    container.querySelectorAll(".menu-checkbox").forEach(chk => {
+      chk.addEventListener("change", () => {
+        selected[chk.dataset.id] = chk.checked;
         actualizarTicket();
       });
     });
@@ -150,7 +141,7 @@ function actualizarTicket() {
   const submitBtn = document.getElementById("submitBtn");
   const personas = parseInt(document.getElementById("personas").value, 10) || 0;
 
-  const chosen = menuItems.filter(i => (selected[i.id] || 0) > 0);
+  const chosen = menuItems.filter(i => selected[i.id]);
 
   if (chosen.length === 0) {
     lines.innerHTML = `<div class="empty">Aún no elegís nada del menú</div>`;
@@ -161,10 +152,9 @@ function actualizarTicket() {
 
   let total = 0;
   lines.innerHTML = chosen.map(item => {
-    const qty = selected[item.id];
-    const perPersonSubtotal = item.precio * qty * (personas || 1);
-    total += perPersonSubtotal;
-    return `<div class="line"><span>${item.nombre} × ${qty}${personas ? ` (${personas}p)` : ""}</span><span>Q${perPersonSubtotal.toFixed(2)}</span></div>`;
+    const subtotal = item.precio * (personas || 1);
+    total += subtotal;
+    return `<div class="line"><span>${item.nombre}${personas ? ` (${personas}p)` : ""}</span><span>Q${subtotal.toFixed(2)}</span></div>`;
   }).join("");
   totalEl.textContent = `Q${total.toFixed(2)}`;
   submitBtn.disabled = !(personas > 0);
@@ -186,7 +176,7 @@ document.getElementById("submitBtn").addEventListener("click", async () => {
     return;
   }
 
-  const chosen = menuItems.filter(i => (selected[i.id] || 0) > 0);
+  const chosen = menuItems.filter(i => selected[i.id]);
   if (chosen.length === 0) {
     alert("Elegí al menos un platillo del menú.");
     return;
@@ -196,7 +186,7 @@ document.getElementById("submitBtn").addEventListener("click", async () => {
     menuId: i.id,
     nombre: i.nombre,
     precio: i.precio,
-    cantidad: selected[i.id]
+    cantidad: 1
   }));
   const total = items.reduce((sum, i) => sum + i.precio * i.cantidad * personas, 0);
 
