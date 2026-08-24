@@ -71,6 +71,37 @@ Al terminar, la terminal te da la URL pública, algo como:
 3. Vos entrás al panel, revisás la cotización, cambiás el estado (Nueva → Contactado → Cotización enviada → Cerrada/Perdida) — si querés, se le avisa al cliente por correo automáticamente.
 4. Podés escribirle mensajes directo desde el panel; cada mensaje se le envía por correo también.
 
+## Paso 7 — Subirlo a GitHub y automatizar el despliegue (opcional pero recomendado)
+
+El proyecto ya viene con un repo de git inicializado (`git log` te muestra el primer commit) y un workflow de GitHub Actions en `.github/workflows/deploy.yml` que hace `firebase deploy` automáticamente cada vez que hagas `git push` a `main`.
+
+1. **Creá el repo en GitHub**: entrá a https://github.com/new, nombralo `so-italian-catering` (privado, ya que el código va a tener referencias a tu configuración), y **no** marques "Initialize with README" (ya tenés uno).
+
+2. **Conectá tu carpeta local con ese repo y subilo:**
+   ```bash
+   cd so-italian-catering
+   git branch -M main
+   git remote add origin https://github.com/TU-USUARIO/so-italian-catering.git
+   git push -u origin main
+   ```
+
+3. **Generá una llave de servicio de Firebase** para que GitHub Actions pueda desplegar por vos:
+   - Firebase Console → ⚙️ Configuración del proyecto → **Cuentas de servicio** → **Generar nueva clave privada** (descarga un `.json`).
+
+4. **Agregá dos secretos en GitHub**: en tu repo → Settings → Secrets and variables → Actions → **New repository secret**:
+   - `FIREBASE_SERVICE_ACCOUNT` → pegá todo el contenido del `.json` que descargaste
+   - `FIREBASE_PROJECT_ID` → el ID de tu proyecto de Firebase (lo ves en Configuración del proyecto)
+
+5. Listo. De ahora en adelante, cualquier cambio que hagas (por ejemplo editar `public/index.html`) y subas con:
+   ```bash
+   git add -A
+   git commit -m "Ajuste al formulario"
+   git push
+   ```
+   se despliega solo, sin que tengas que correr `firebase deploy` a mano.
+
+> Nota: `RESEND_API_KEY` sigue viviendo solo en Firebase (Paso 4) — no hace falta duplicarlo en GitHub, porque las Cloud Functions lo leen directo de Firebase Secret Manager.
+
 ## Ideas para después (fase 2)
 
 - Botón de "Aceptar cotización" en el correo del cliente que actualice el estado solo.

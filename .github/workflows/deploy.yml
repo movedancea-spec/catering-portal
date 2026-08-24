@@ -1,0 +1,24 @@
+name: Deploy So Italian Catering
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Descargar el código
+        uses: actions/checkout@v4
+
+      - name: Instalar dependencias de las funciones
+        run: npm install
+        working-directory: functions
+
+      - name: Desplegar a Firebase (Hosting, Firestore rules, Functions)
+        uses: w9jds/firebase-action@master
+        with:
+          args: deploy --only hosting,firestore:rules,functions
+        env:
+          GCP_SA_KEY: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
