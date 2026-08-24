@@ -157,6 +157,17 @@ function renderQuotes() {
   const list = document.getElementById("quoteList");
   const filtered = filtro ? quotes.filter(q => q.estado === filtro) : quotes;
 
+  const newCount = quotes.filter(q => q.estado === "New").length;
+  const tabNew = document.querySelector('.tab[data-tab="cotizaciones"]');
+  if (tabNew) tabNew.textContent = newCount > 0 ? `Quotes (${newCount} new)` : "Quotes";
+
+  const twoDaysMs = 2 * 24 * 60 * 60 * 1000;
+  const isOverdue = q => {
+    if (q.estado !== "Contacted" || !q.fechaContactado) return false;
+    const contactedAt = q.fechaContactado.toMillis ? q.fechaContactado.toMillis() : 0;
+    return Date.now() - contactedAt >= twoDaysMs;
+  };
+
   if (filtered.length === 0) {
     list.innerHTML = `<div class="empty-state"><div class="display">No quotes yet</div><p>As soon as a client submits the form, it'll show up here.</p></div>`;
     return;
@@ -168,7 +179,10 @@ function renderQuotes() {
       <div>${q.fechaEvento || "—"}</div>
       <div>${q.numPersonas || "—"}</div>
       <div>$${Number(q.total || 0).toFixed(2)}</div>
-      <div><span class="badge ${badgeClass(q.estado)}">${q.estado}</span></div>
+      <div>
+        <span class="badge ${badgeClass(q.estado)}">${q.estado}</span>
+        ${isOverdue(q) ? `<span class="badge" style="background:#C4622D; margin-left:4px;">⏰ Follow up</span>` : ""}
+      </div>
       <div style="display:flex; gap:6px;">
         <button class="btn btn-ghost btn-sm view-btn" data-id="${q.id}">View</button>
         <button class="btn btn-ghost btn-sm del-quote-btn" data-id="${q.id}">Delete</button>
@@ -271,13 +285,20 @@ async function abrirDetalle(id) {
     }));
     const total = items.reduce((sum, i) => sum + i.precio * i.cantidad * numPersonas, 0);
 
+    const updateData = {
+      estado: nuevoEstado, numPersonas, items, total, actualizadoEn: serverTimestamp()
+    };
+    // Every time a quote is (re)marked as "Contacted", reset the 2-day follow-up clock.
+    if (nuevoEstado === "Contacted") {
+      updateData.fechaContactado = serverTimestamp();
+      updateData.recordatorioEnviado = false;
+    }
+
     const saveBtn = document.getElementById("saveEstadoBtn");
     saveBtn.disabled = true;
     saveBtn.textContent = "Saving…";
 
-    await updateDoc(doc(db, "cotizaciones", id), {
-      estado: nuevoEstado, numPersonas, items, total, actualizadoEn: serverTimestamp()
-    });
+    await updateDoc(doc(db, "cotizaciones", id), updateData);
     if (notificar) {
       try { await sendStatusUpdateEmail({ quoteId: id, nuevoEstado }); } catch (e) { console.error(e); }
     }

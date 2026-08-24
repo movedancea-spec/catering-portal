@@ -1,5 +1,6 @@
 const { onDocumentCreated } = require("firebase-functions/v2/firestore");
 const { onCall } = require("firebase-functions/v2/https");
+const { onSchedule } = require("firebase-functions/v2/scheduler");
 const { defineSecret } = require("firebase-functions/params");
 const admin = require("firebase-admin");
 
@@ -178,5 +179,59 @@ exports.sendStatusUpdateEmail = onCall(
     });
 
     return { ok: true };
+  }
+);
+
+// ------------------------------------------------------------------
+// 4. Runs automatically every day at 9am (Guatemala time).
+//    Emails the owner a reminder for any quote that's been sitting in
+//    "Contacted" status for 2+ days with no further update.
+// ------------------------------------------------------------------
+exports.dailyFollowUpCheck = onSchedule(
+  { schedule: "every day 09:00", timeZone: "America/Guatemala", secrets: [RESEND_API_KEY] },
+  async () => {
+    const snap = await db.collection("cotizaciones").where("estado", "==", "Contacted").get();
+    const twoDaysMs = 2 * 24 * 60 * 60 * 1000;
+
+    const pending = snap.docs.filter(d => {
+      const data = d.data();
+      if (!data.fechaContactado || data.recordatorioEnviado) return false;
+      const contactedAt = data.fechaContactado.toMillis ? data.fechaContactado.toMillis() : 0;
+      return Date.now() - contactedAt >= twoDaysMs;
+    });
+
+    if (pending.length === 0) return null;
+
+    const rows = pending.map(d => {
+      const q = d.data();
+      return `<tr><td style="padding:6px 10px; border-bottom:1px solid #E4DAC4;">${q.clienteNombre}</td><td style="padding:6px 10px; border-bottom:1px solid #E4DAC4;">${q.clienteEmail}</td><td style="padding:6px 10px; border-bottom:1px solid #E4DAC4;">${q.fechaEvento || "—"}</td></tr>`;
+    }).join("");
+
+    const html = `
+      <div style="font-family:sans-serif; color:#2B2119;">
+        <h2 style="color:#33482E;">Follow-up reminder</h2>
+        <p>These clients were marked "Contacted" 2 or more days ago with no further update. Time to reach out again:</p>
+        <table style="width:100%; border-collapse:collapse; margin:12px 0;">
+          <tr style="text-align:left; border-bottom:2px solid #33482E;">
+            <th style="padding:6px 10px;">Client</th><th style="padding:6px 10px;">Email</th><th style="padding:6px 10px;">Event date</th>
+          </tr>
+          ${rows}
+        </table>
+        <p>Check the full details in the admin dashboard.</p>
+      </div>
+    `;
+
+    await enviarCorreo({
+      to: OWNER_EMAIL,
+      subject: `Follow-up reminder: ${pending.length} client${pending.length > 1 ? "s" : ""} to contact`,
+      html,
+      apiKey: RESEND_API_KEY.value()
+    });
+
+    const batch = db.batch();
+    pending.forEach(d => batch.update(d.ref, { recordatorioEnviado: true }));
+    await batch.commit();
+
+    return null;
   }
 );
