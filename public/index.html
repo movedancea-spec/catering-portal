@@ -81,6 +81,7 @@
   <div id="successView" class="card" style="display:none; text-align:center; padding:48px 24px;">
     <div class="display" style="font-size:26px; margin-bottom:10px;">All set, <span id="successName"></span>! 🍝</div>
     <p>We've received your quote request. A summary was sent to <strong id="successEmail"></strong>, and a member of our team will be in touch soon to confirm the details.</p>
+    <div id="awayMessageBox" style="display:none; margin-top:16px; padding:14px; background:#F7F1E4; border-radius:8px; text-align:left; white-space:pre-line;"></div>
   </div>
 
 </div>
@@ -106,6 +107,7 @@ function resolveTenantId() {
 
 const tenantId = resolveTenantId();
 let menuItems = [];
+let tenantSettings = {};
 const selected = {};
 
 function applyBranding(tenant, settings) {
@@ -135,6 +137,7 @@ async function init() {
   const tenant = tenantSnap.data();
   const settingsSnap = await getDoc(doc(db, "tenants", tenantId, "settings", "quoteEmail"));
   const settings = settingsSnap.exists() ? settingsSnap.data() : {};
+  tenantSettings = settings;
   applyBranding(tenant, settings);
 
   document.getElementById("formView").style.display = "block";
@@ -248,6 +251,11 @@ document.getElementById("submitBtn").addEventListener("click", async () => {
     document.getElementById("successView").style.display = "block";
     document.getElementById("successName").textContent = nombre.split(" ")[0];
     document.getElementById("successEmail").textContent = correo;
+    if (tenantSettings.awayEnabled && tenantSettings.awayMessage) {
+      const box = document.getElementById("awayMessageBox");
+      box.textContent = tenantSettings.awayMessage;
+      box.style.display = "block";
+    }
   } catch (err) {
     console.error(err);
     alert("There was a problem sending your request. Please try again in a moment.");

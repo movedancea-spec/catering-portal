@@ -95,6 +95,15 @@
       <p class="helper-text">Applied to your quote form, dashboard, and emails.</p>
     </div>
     <div class="card" style="margin-bottom:16px;">
+      <div class="section-title">Away / Vacation Mode</div>
+      <label style="display:flex; align-items:center; gap:8px; font-weight:600; margin-bottom:10px;">
+        <input type="checkbox" id="tplAwayEnabled" style="width:auto;">
+        Show an away message to clients right now
+      </label>
+      <textarea id="tplAwayMessage" rows="3" placeholder="e.g. Thank you for your order! Our team is currently out of the office and will get back to you as soon as possible."></textarea>
+      <p class="helper-text">Clients can still submit quotes as usual — this message just appears on their confirmation screen and in their confirmation email while checked. Uncheck it when you're back.</p>
+    </div>
+    <div class="card" style="margin-bottom:16px;">
       <div class="section-title">Business Name</div>
       <input type="text" id="tplBusinessName">
     </div>
@@ -603,7 +612,9 @@ const DEFAULT_TEMPLATE = {
   footerText: "Thank you for considering us for your event!",
   logoUrl: null,
   primaryColor: "#C4622D",
-  accentColor: "#33482E"
+  accentColor: "#33482E",
+  awayEnabled: false,
+  awayMessage: ""
 };
 let currentTemplate = { ...DEFAULT_TEMPLATE };
 
@@ -616,6 +627,8 @@ async function cargarTemplate() {
   document.getElementById("tplFooter").value = currentTemplate.footerText;
   document.getElementById("tplPrimaryColor").value = currentTemplate.primaryColor;
   document.getElementById("tplAccentColor").value = currentTemplate.accentColor;
+  document.getElementById("tplAwayEnabled").checked = !!currentTemplate.awayEnabled;
+  document.getElementById("tplAwayMessage").value = currentTemplate.awayMessage || "";
   renderLogoPreview();
   applyBrandingToDashboard();
 }
@@ -670,7 +683,9 @@ document.getElementById("saveTemplateBtn").addEventListener("click", async () =>
     footerText: document.getElementById("tplFooter").value.trim() || DEFAULT_TEMPLATE.footerText,
     logoUrl: currentTemplate.logoUrl || null,
     primaryColor: document.getElementById("tplPrimaryColor").value,
-    accentColor: document.getElementById("tplAccentColor").value
+    accentColor: document.getElementById("tplAccentColor").value,
+    awayEnabled: document.getElementById("tplAwayEnabled").checked,
+    awayMessage: document.getElementById("tplAwayMessage").value.trim()
   };
   await setDoc(tRef("settings", "quoteEmail"), data, { merge: true });
   currentTemplate = data;

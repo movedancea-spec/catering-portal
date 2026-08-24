@@ -46,7 +46,9 @@ const DEFAULT_TEMPLATE = {
   footerText: "Thank you for considering us for your event!",
   logoUrl: null,
   primaryColor: "#C4622D",
-  accentColor: "#33482E"
+  accentColor: "#33482E",
+  awayEnabled: false,
+  awayMessage: ""
 };
 
 async function getTenant(tenantId) {
@@ -71,11 +73,16 @@ function buildQuoteEmailHtml(q, settings, { heading, statusLine, disclaimer } = 
     ? `<div style="margin-top:16px; padding:14px; background:#F7F1E4; border-radius:8px;"><strong style="color:${accent};">Policies</strong><p style="white-space:pre-line; margin:6px 0 0; font-size:14px;">${settings.policiesText}</p></div>`
     : "";
 
+  const awayHtml = (settings.awayEnabled && settings.awayMessage)
+    ? `<div style="margin-top:16px; padding:14px; background:#F7F1E4; border-radius:8px; white-space:pre-line;">${settings.awayMessage}</div>`
+    : "";
+
   return `
     <div style="font-family:sans-serif; color:#2B2119; max-width:560px;">
       ${logoHtml}
       ${heading ? `<h3 style="color:${accent};">${heading}</h3>` : ""}
       <p>${intro}</p>
+      ${awayHtml}
       <p><strong>Event date:</strong> ${q.fechaEvento}<br>
          <strong>Number of guests:</strong> ${q.numPersonas}${statusLine ? `<br><strong>Status:</strong> ${statusLine}` : ""}</p>
       <table style="width:100%; border-collapse:collapse; margin:12px 0;">
