@@ -369,3 +369,67 @@ exports.migrateLegacyData = onCall(async (request) => {
 
   return { ok: true, menuCount: oldMenu.size, quoteCount: oldQuotes.size };
 });
+
+// ------------------------------------------------------------------
+// 8. Daily 9am reminder for events happening within 30 days, per tenant.
+//    Skips quotes already Closed or Lost. Sends once per quote.
+// ------------------------------------------------------------------
+exports.eventDateReminderCheck = onSchedule(
+  { schedule: "every day 09:30", timeZone: "America/Indiana/Indianapolis", secrets: [RESEND_API_KEY] },
+  async () => {
+    const snap = await db.collectionGroup("cotizaciones").get();
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const byTenant = {};
+    snap.docs.forEach(d => {
+      const data = d.data();
+      if (data.estado === "Closed" || data.estado === "Lost") return;
+      if (!data.fechaEvento || data.recordatorioEventoEnviado) return;
+
+      const eventDate = new Date(data.fechaEvento + "T00:00:00");
+      const daysUntil = Math.round((eventDate - today) / (24 * 60 * 60 * 1000));
+      if (daysUntil < 0 || daysUntil > 30) return;
+
+      const tenantId = d.ref.parent.parent.id;
+      if (!byTenant[tenantId]) byTenant[tenantId] = [];
+      byTenant[tenantId].push({ doc: d, daysUntil });
+    });
+
+    const apiKey = RESEND_API_KEY.value();
+
+    for (const tenantId of Object.keys(byTenant)) {
+      const tenant = await getTenant(tenantId);
+      if (!tenant || tenant.active === false || !tenant.ownerEmail) continue;
+
+      const entries = byTenant[tenantId];
+      const rows = entries.map(({ doc, daysUntil }) => {
+        const q = doc.data();
+        return `<tr><td style="padding:6px 10px; border-bottom:1px solid #E4DAC4;">${q.clienteNombre}</td><td style="padding:6px 10px; border-bottom:1px solid #E4DAC4;">${q.clienteEmail}</td><td style="padding:6px 10px; border-bottom:1px solid #E4DAC4;">${q.fechaEvento}</td><td style="padding:6px 10px; border-bottom:1px solid #E4DAC4;">${daysUntil} day${daysUntil === 1 ? "" : "s"}</td></tr>`;
+      }).join("");
+
+      const html = `
+        <div style="font-family:sans-serif; color:#2B2119;">
+          <h2 style="color:#33482E;">Upcoming events reminder</h2>
+          <p>These quotes have an event coming up within the next 30 days. Time to check in with these clients:</p>
+          <table style="width:100%; border-collapse:collapse; margin:12px 0;">
+            <tr style="text-align:left; border-bottom:2px solid #33482E;"><th style="padding:6px 10px;">Client</th><th style="padding:6px 10px;">Email</th><th style="padding:6px 10px;">Event date</th><th style="padding:6px 10px;">Time left</th></tr>
+            ${rows}
+          </table>
+        </div>
+      `;
+
+      await enviarCorreo({
+        to: tenant.ownerEmail,
+        subject: `${entries.length} upcoming event${entries.length > 1 ? "s" : ""} within 30 days`,
+        html, apiKey
+      });
+
+      const batch = db.batch();
+      entries.forEach(({ doc }) => batch.update(doc.ref, { recordatorioEventoEnviado: true }));
+      await batch.commit();
+    }
+
+    return null;
+  }
+);

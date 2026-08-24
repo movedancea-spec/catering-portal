@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Restaurant Dashboard</title>
 <link rel="stylesheet" href="css/styles.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 </head>
 <body>
 
@@ -39,12 +41,15 @@
   </div>
 
   <div id="tab-cotizaciones">
-    <div class="card" style="margin-bottom:16px; display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
-      <label style="margin:0;">Filter by status:</label>
-      <select id="filtroEstado" style="width:auto;">
-        <option value="">All</option>
-        <option>New</option><option>Contacted</option><option>Quote Sent</option><option>Closed</option><option>Lost</option>
-      </select>
+    <div class="card" style="margin-bottom:16px; display:flex; gap:10px; flex-wrap:wrap; align-items:center; justify-content:space-between;">
+      <div style="display:flex; gap:10px; align-items:center;">
+        <label style="margin:0;">Filter by status:</label>
+        <select id="filtroEstado" style="width:auto;">
+          <option value="">All</option>
+          <option>New</option><option>Contacted</option><option>Quote Sent</option><option>Closed</option><option>Lost</option>
+        </select>
+      </div>
+      <button class="btn btn-ghost btn-sm" id="downloadPdfBtn">⬇ Download Client Backup (PDF)</button>
     </div>
     <div class="card">
       <div class="quote-row head"><div>Client</div><div>Event</div><div>Guests</div><div>Total</div><div>Status</div><div></div></div>
@@ -214,6 +219,13 @@ function renderQuotes() {
     return Date.now() - contactedAt >= twoDaysMs;
   };
 
+  const daysUntilEvent = q => {
+    if (!q.fechaEvento) return null;
+    const eventDate = new Date(q.fechaEvento + "T00:00:00");
+    const today = new Date(); today.setHours(0,0,0,0);
+    return Math.round((eventDate - today) / (24 * 60 * 60 * 1000));
+  };
+
   if (filtered.length === 0) {
     list.innerHTML = `<div class="empty-state"><div class="display">No quotes yet</div><p>As soon as a client submits the form, it'll show up here.</p></div>`;
     return;
@@ -225,7 +237,7 @@ function renderQuotes() {
       <div>${q.fechaEvento || "—"}</div>
       <div>${q.numPersonas || "—"}</div>
       <div>$${Number(q.total || 0).toFixed(2)}</div>
-      <div><span class="badge ${badgeClass(q.estado)}">${q.estado}</span>${isOverdue(q) ? `<span class="badge" style="background:#C4622D; margin-left:4px;">⏰ Follow up</span>` : ""}</div>
+      <div><span class="badge ${badgeClass(q.estado)}">${q.estado}</span>${isOverdue(q) ? `<span class="badge" style="background:#C4622D; margin-left:4px;">⏰ Follow up</span>` : ""}${(daysUntilEvent(q) !== null && daysUntilEvent(q) >= 0 && daysUntilEvent(q) <= 30 && q.estado !== "Closed" && q.estado !== "Lost") ? `<span class="badge" style="background:#7A4FB5; margin-left:4px;">📅 ${daysUntilEvent(q)}d to event</span>` : ""}</div>
       <div style="display:flex; gap:6px;">
         <button class="btn btn-ghost btn-sm view-btn" data-id="${q.id}">View</button>
         <button class="btn btn-ghost btn-sm del-quote-btn" data-id="${q.id}">Delete</button>
@@ -557,6 +569,40 @@ document.getElementById("saveTemplateBtn").addEventListener("click", async () =>
   mostrarToast("Saved");
   document.getElementById("templateSavedNote").textContent = "Applies to your quote form, dashboard, and emails.";
   setTimeout(() => { document.getElementById("templateSavedNote").textContent = ""; }, 4000);
+});
+
+document.getElementById("downloadPdfBtn").addEventListener("click", () => {
+  if (quotes.length === 0) { alert("No quotes to export yet."); return; }
+  const { jsPDF } = window.jspdf;
+  const pdf = new jsPDF({ orientation: "landscape" });
+
+  pdf.setFontSize(16);
+  pdf.text(`${currentTemplate.businessName || "Client"} — Client Backup`, 14, 16);
+  pdf.setFontSize(10);
+  pdf.text(`Generated ${new Date().toLocaleDateString()} · ${quotes.length} quote${quotes.length === 1 ? "" : "s"}`, 14, 22);
+
+  const rows = quotes.map(q => [
+    q.clienteNombre || "-",
+    q.clienteEmail || "-",
+    q.clienteTelefono || "-",
+    q.fechaEvento || "-",
+    String(q.numPersonas || "-"),
+    (q.items || []).map(i => i.nombre).join(", ") || "-",
+    `$${Number(q.total || 0).toFixed(2)}`,
+    q.estado || "-",
+    q.notas || ""
+  ]);
+
+  pdf.autoTable({
+    startY: 28,
+    head: [["Client", "Email", "Phone", "Event Date", "Guests", "Menu Selected", "Total", "Status", "Notes"]],
+    body: rows,
+    styles: { fontSize: 7, cellPadding: 2 },
+    headStyles: { fillColor: [51, 72, 46] }
+  });
+
+  pdf.save(`client-backup-${new Date().toISOString().slice(0, 10)}.pdf`);
+  mostrarToast("PDF downloaded");
 });
 
 function mostrarToast(msg) {
