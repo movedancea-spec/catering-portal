@@ -1,77 +1,77 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Panel — So Italian Catering</title>
+<title>Dashboard — So Italian Catering</title>
 <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
 
 <div class="topbar">
-  <div class="brand">So Italian Catering<small>Panel de administración</small></div>
-  <button class="btn btn-ghost btn-sm" id="logoutBtn" style="display:none; color:#F7F1E4; border-color:#5a6f52;">Cerrar sesión</button>
+  <div class="brand">So Italian Catering<small>Admin Dashboard</small></div>
+  <button class="btn btn-ghost btn-sm" id="logoutBtn" style="display:none; color:#F7F1E4; border-color:#5a6f52;">Log out</button>
 </div>
 
 <!-- LOGIN -->
 <div class="wrap-narrow" id="loginView">
   <div class="card" style="max-width:380px; margin:60px auto 0;">
-    <div class="section-title">Iniciar sesión</div>
+    <div class="section-title">Log In</div>
     <div class="field">
-      <label for="loginEmail">Correo</label>
+      <label for="loginEmail">Email</label>
       <input type="email" id="loginEmail">
     </div>
     <div class="field">
-      <label for="loginPass">Contraseña</label>
+      <label for="loginPass">Password</label>
       <input type="password" id="loginPass">
     </div>
-    <button class="btn btn-primary" id="loginBtn" style="width:100%;">Entrar</button>
+    <button class="btn btn-primary" id="loginBtn" style="width:100%;">Log In</button>
     <p class="helper-text" id="loginError"></p>
-    <p class="helper-text">El usuario se crea desde Firebase Console → Authentication → Users.</p>
+    <p class="helper-text">Users are created from Firebase Console → Authentication → Users.</p>
   </div>
 </div>
 
 <!-- DASHBOARD -->
 <div class="wrap" id="dashView" style="display:none;">
   <div class="tabs">
-    <div class="tab active" data-tab="cotizaciones">Cotizaciones</div>
-    <div class="tab" data-tab="menu">Menú</div>
+    <div class="tab active" data-tab="cotizaciones">Quotes</div>
+    <div class="tab" data-tab="menu">Menu</div>
   </div>
 
-  <!-- Cotizaciones -->
+  <!-- Quotes -->
   <div id="tab-cotizaciones">
     <div class="card" style="margin-bottom:16px; display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
-      <label style="margin:0;">Filtrar por estado:</label>
+      <label style="margin:0;">Filter by status:</label>
       <select id="filtroEstado" style="width:auto;">
-        <option value="">Todas</option>
-        <option>Nueva</option>
-        <option>Contactado</option>
-        <option>Cotización enviada</option>
-        <option>Cerrada</option>
-        <option>Perdida</option>
+        <option value="">All</option>
+        <option>New</option>
+        <option>Contacted</option>
+        <option>Quote Sent</option>
+        <option>Closed</option>
+        <option>Lost</option>
       </select>
     </div>
     <div class="card">
       <div class="quote-row head">
-        <div>Cliente</div><div>Evento</div><div>Personas</div><div>Total</div><div>Estado</div><div></div>
+        <div>Client</div><div>Event</div><div>Guests</div><div>Total</div><div>Status</div><div></div>
       </div>
       <div id="quoteList"></div>
     </div>
   </div>
 
-  <!-- Menú -->
+  <!-- Menu -->
   <div id="tab-menu" style="display:none;">
     <div class="card" style="margin-bottom:16px;">
-      <div class="section-title">Agregar platillo</div>
+      <div class="section-title">Add Menu Item</div>
       <div class="field-row">
-        <div class="field"><label>Categoría</label><input type="text" id="mCategoria" placeholder="Ej. Entradas"></div>
-        <div class="field"><label>Nombre</label><input type="text" id="mNombre" placeholder="Ej. Lasagna clásica"></div>
+        <div class="field"><label>Category</label><input type="text" id="mCategoria" placeholder="e.g. Appetizers"></div>
+        <div class="field"><label>Name</label><input type="text" id="mNombre" placeholder="e.g. Classic Lasagna"></div>
       </div>
       <div class="field-row">
-        <div class="field"><label>Precio por persona (Q)</label><input type="number" id="mPrecio" step="0.01"></div>
-        <div class="field"><label>Descripción (opcional)</label><input type="text" id="mDescripcion"></div>
+        <div class="field"><label>Price per person ($)</label><input type="number" id="mPrecio" step="0.01"></div>
+        <div class="field"><label>Description (optional)</label><input type="text" id="mDescripcion"></div>
       </div>
-      <button class="btn btn-primary" id="addMenuBtn">Agregar al menú</button>
+      <button class="btn btn-primary" id="addMenuBtn">Add to Menu</button>
     </div>
     <div class="card">
       <div id="menuAdminList"></div>
@@ -79,7 +79,7 @@
   </div>
 </div>
 
-<!-- Modal detalle cotización -->
+<!-- Quote detail modal -->
 <div class="overlay" id="detailOverlay" style="display:none;">
   <div class="modal" id="detailModal"></div>
 </div>
@@ -102,10 +102,10 @@ const functions = getFunctions();
 const sendMessageToClient = httpsCallable(functions, "sendMessageToClient");
 const sendStatusUpdateEmail = httpsCallable(functions, "sendStatusUpdateEmail");
 
-const ESTADOS = ["Nueva", "Contactado", "Cotización enviada", "Cerrada", "Perdida"];
+const ESTADOS = ["New", "Contacted", "Quote Sent", "Closed", "Lost"];
 const badgeClass = e => ({
-  "Nueva": "badge-nueva", "Contactado": "badge-contactado",
-  "Cotización enviada": "badge-enviada", "Cerrada": "badge-cerrada", "Perdida": "badge-perdida"
+  "New": "badge-nueva", "Contacted": "badge-contactado",
+  "Quote Sent": "badge-enviada", "Closed": "badge-cerrada", "Lost": "badge-perdida"
 }[e] || "badge-nueva");
 
 let quotes = [];
@@ -119,7 +119,7 @@ document.getElementById("loginBtn").addEventListener("click", async () => {
   try {
     await signInWithEmailAndPassword(auth, email, pass);
   } catch (err) {
-    document.getElementById("loginError").textContent = "Correo o contraseña incorrectos.";
+    document.getElementById("loginError").textContent = "Incorrect email or password.";
   }
 });
 document.getElementById("logoutBtn").addEventListener("click", () => signOut(auth));
@@ -141,7 +141,7 @@ document.querySelectorAll(".tab").forEach(tab => {
   });
 });
 
-// ---------- Cotizaciones ----------
+// ---------- Quotes ----------
 function escucharCotizaciones() {
   const q = query(collection(db, "cotizaciones"), orderBy("creadoEn", "desc"));
   onSnapshot(q, snap => {
@@ -158,7 +158,7 @@ function renderQuotes() {
   const filtered = filtro ? quotes.filter(q => q.estado === filtro) : quotes;
 
   if (filtered.length === 0) {
-    list.innerHTML = `<div class="empty-state"><div class="display">Sin cotizaciones aún</div><p>En cuanto un cliente llene el formulario, aparece aquí.</p></div>`;
+    list.innerHTML = `<div class="empty-state"><div class="display">No quotes yet</div><p>As soon as a client submits the form, it'll show up here.</p></div>`;
     return;
   }
 
@@ -167,9 +167,9 @@ function renderQuotes() {
       <div><strong>${q.clienteNombre}</strong><br><span class="helper-text">${q.clienteEmail}</span></div>
       <div>${q.fechaEvento || "—"}</div>
       <div>${q.numPersonas || "—"}</div>
-      <div>Q${Number(q.total || 0).toFixed(2)}</div>
+      <div>$${Number(q.total || 0).toFixed(2)}</div>
       <div><span class="badge ${badgeClass(q.estado)}">${q.estado}</span></div>
-      <div><button class="btn btn-ghost btn-sm view-btn" data-id="${q.id}">Ver</button></div>
+      <div><button class="btn btn-ghost btn-sm view-btn" data-id="${q.id}">View</button></div>
     </div>
   `).join("");
 
@@ -185,50 +185,50 @@ async function abrirDetalle(id) {
 
   const modal = document.getElementById("detailModal");
   modal.innerHTML = `
-    <div class="section-title">Cotización de ${q.clienteNombre}</div>
+    <div class="section-title">Quote for ${q.clienteNombre}</div>
     <p class="helper-text">${q.clienteEmail} · ${q.clienteTelefono}</p>
-    <p><strong>Evento:</strong> ${q.fechaEvento || "—"} ${q.lugar ? `· ${q.lugar}` : ""}</p>
+    <p><strong>Event:</strong> ${q.fechaEvento || "—"} ${q.lugar ? `· ${q.lugar}` : ""}</p>
 
     <div class="field">
-      <label>Número de personas</label>
+      <label>Number of guests</label>
       <input type="number" id="editPersonas" min="1" value="${q.numPersonas}">
     </div>
 
-    <div class="section-title" style="margin-top:4px;">Menú (marcá lo que incluye la cotización)</div>
-    <div id="editMenuList"><p class="helper-text">Cargando menú…</p></div>
+    <div class="section-title" style="margin-top:4px;">Menu (check what's included in the quote)</div>
+    <div id="editMenuList"><p class="helper-text">Loading menu…</p></div>
 
     <div class="ticket" style="position:static; margin-top:12px;">
       <h4>Total</h4>
-      <div class="line total-line"><span>Total actualizado</span><span id="editTotalPreview">Q${Number(q.total||0).toFixed(2)}</span></div>
+      <div class="line total-line"><span>Updated total</span><span id="editTotalPreview">$${Number(q.total||0).toFixed(2)}</span></div>
     </div>
 
-    ${q.notas ? `<p style="margin-top:12px;"><strong>Notas del cliente:</strong> ${q.notas}</p>` : ""}
+    ${q.notas ? `<p style="margin-top:12px;"><strong>Client notes:</strong> ${q.notas}</p>` : ""}
 
     <div class="field" style="margin-top:16px;">
-      <label>Estado</label>
+      <label>Status</label>
       <select id="estadoSelect">
         ${ESTADOS.map(e => `<option ${e === q.estado ? "selected" : ""}>${e}</option>`).join("")}
       </select>
     </div>
     <label style="display:flex; align-items:center; gap:6px; font-weight:400; margin-bottom:16px;">
       <input type="checkbox" id="notificarCliente" style="width:auto;" checked>
-      Reenviar la cotización actualizada al cliente por correo
+      Resend the updated quote to the client by email
     </label>
 
-    <div class="section-title">Mensajes</div>
-    <div class="msg-thread" id="msgThread"><p class="helper-text">Cargando…</p></div>
+    <div class="section-title">Messages</div>
+    <div class="msg-thread" id="msgThread"><p class="helper-text">Loading…</p></div>
     <div class="field">
-      <textarea id="nuevoMensaje" rows="2" placeholder="Escribí un mensaje para el cliente…"></textarea>
+      <textarea id="nuevoMensaje" rows="2" placeholder="Write a message for the client…"></textarea>
     </div>
     <div class="field">
-      <label style="font-weight:400;">Adjuntar archivo (opcional)</label>
+      <label style="font-weight:400;">Attach a file (optional)</label>
       <input type="file" id="adjuntoInput">
       <p class="helper-text" id="adjuntoStatus"></p>
     </div>
     <div style="display:flex; gap:10px; justify-content:flex-end;">
-      <button class="btn btn-ghost btn-sm" id="closeModalBtn">Cerrar</button>
-      <button class="btn btn-ghost btn-sm" id="sendMsgBtn">Enviar mensaje</button>
-      <button class="btn btn-primary btn-sm" id="saveEstadoBtn">Guardar cambios</button>
+      <button class="btn btn-ghost btn-sm" id="closeModalBtn">Close</button>
+      <button class="btn btn-ghost btn-sm" id="sendMsgBtn">Send Message</button>
+      <button class="btn btn-primary btn-sm" id="saveEstadoBtn">Save Changes</button>
     </div>
   `;
 
@@ -245,7 +245,7 @@ async function abrirDetalle(id) {
     const numPersonas = parseInt(document.getElementById("editPersonas").value, 10) || q.numPersonas;
 
     const checked = Array.from(document.querySelectorAll(".edit-menu-checkbox:checked"));
-    if (checked.length === 0) { alert("La cotización necesita al menos un platillo."); return; }
+    if (checked.length === 0) { alert("The quote needs at least one menu item."); return; }
 
     const items = checked.map(chk => ({
       menuId: chk.dataset.id,
@@ -257,7 +257,7 @@ async function abrirDetalle(id) {
 
     const saveBtn = document.getElementById("saveEstadoBtn");
     saveBtn.disabled = true;
-    saveBtn.textContent = "Guardando…";
+    saveBtn.textContent = "Saving…";
 
     await updateDoc(doc(db, "cotizaciones", id), {
       estado: nuevoEstado, numPersonas, items, total, actualizadoEn: serverTimestamp()
@@ -265,7 +265,7 @@ async function abrirDetalle(id) {
     if (notificar) {
       try { await sendStatusUpdateEmail({ quoteId: id, nuevoEstado }); } catch (e) { console.error(e); }
     }
-    mostrarToast("Cotización actualizada");
+    mostrarToast("Quote updated");
     document.getElementById("detailOverlay").style.display = "none";
   });
 
@@ -284,7 +284,7 @@ async function abrirDetalle(id) {
       let adjuntoNombre = null;
 
       if (file) {
-        statusEl.textContent = "Subiendo archivo…";
+        statusEl.textContent = "Uploading file…";
         const path = `adjuntos/${id}/${Date.now()}_${file.name}`;
         const fileRef = storageRef(storage, path);
         await uploadBytes(fileRef, file);
@@ -294,16 +294,16 @@ async function abrirDetalle(id) {
       }
 
       await addDoc(collection(db, "cotizaciones", id, "mensajes"), {
-        autor: "dueño", texto: texto || "(archivo adjunto)", adjuntoUrl, adjuntoNombre, fecha: serverTimestamp()
+        autor: "owner", texto: texto || "(attachment)", adjuntoUrl, adjuntoNombre, fecha: serverTimestamp()
       });
       await sendMessageToClient({ quoteId: id, texto, adjuntoUrl, adjuntoNombre });
 
       document.getElementById("nuevoMensaje").value = "";
       fileInput.value = "";
-      mostrarToast("Mensaje enviado por correo");
+      mostrarToast("Message sent by email");
     } catch (e) {
       console.error(e);
-      alert("No se pudo enviar el mensaje.");
+      alert("Couldn't send the message.");
     }
     btn.disabled = false;
   });
@@ -314,14 +314,14 @@ async function abrirDetalle(id) {
 function renderEditMenu(q) {
   const list = document.getElementById("editMenuList");
   if (!list) return;
-  if (menu.length === 0) { list.innerHTML = `<p class="helper-text">No hay platillos cargados en el menú todavía.</p>`; return; }
+  if (menu.length === 0) { list.innerHTML = `<p class="helper-text">No menu items yet.</p>`; return; }
 
   const selectedIds = new Set((q.items || []).map(i => i.menuId));
   list.innerHTML = menu.map(item => `
     <label class="menu-item" style="cursor:pointer;">
       <div class="info">
-        <div class="name">${item.nombre} <span class="helper-text">(${item.categoria || "Menú"})</span></div>
-        <div class="price">Q${Number(item.precio).toFixed(2)} / persona</div>
+        <div class="name">${item.nombre} <span class="helper-text">(${item.categoria || "Menu"})</span></div>
+        <div class="price">$${Number(item.precio).toFixed(2)} / person</div>
       </div>
       <input type="checkbox" class="edit-menu-checkbox" data-id="${item.id}" data-nombre="${item.nombre}" data-precio="${item.precio}" ${selectedIds.has(item.id) ? "checked" : ""} style="width:24px; height:24px; accent-color: var(--terracotta); flex-shrink:0;">
     </label>
@@ -341,7 +341,7 @@ function recalcularEditTotal() {
   const checked = document.querySelectorAll(".edit-menu-checkbox:checked");
   let total = 0;
   checked.forEach(chk => { total += parseFloat(chk.dataset.precio) * personas; });
-  totalEl.textContent = `Q${total.toFixed(2)}`;
+  totalEl.textContent = `$${total.toFixed(2)}`;
 }
 
 function escucharMensajes(id) {
@@ -349,19 +349,19 @@ function escucharMensajes(id) {
   onSnapshot(q, snap => {
     const thread = document.getElementById("msgThread");
     if (!thread) return;
-    if (snap.empty) { thread.innerHTML = `<p class="helper-text">Sin mensajes todavía.</p>`; return; }
+    if (snap.empty) { thread.innerHTML = `<p class="helper-text">No messages yet.</p>`; return; }
     thread.innerHTML = snap.docs.map(d => {
       const m = d.data();
       const adjunto = m.adjuntoUrl
-        ? `<br><a href="${m.adjuntoUrl}" target="_blank" style="color:inherit; text-decoration:underline;">📎 ${m.adjuntoNombre || "Ver adjunto"}</a>`
+        ? `<br><a href="${m.adjuntoUrl}" target="_blank" style="color:inherit; text-decoration:underline;">📎 ${m.adjuntoNombre || "View attachment"}</a>`
         : "";
-      return `<div class="msg msg-${m.autor === "dueño" ? "dueño" : "cliente"}">${m.texto}${adjunto}</div>`;
+      return `<div class="msg msg-${m.autor === "owner" || m.autor === "dueño" ? "dueño" : "cliente"}">${m.texto}${adjunto}</div>`;
     }).join("");
     thread.scrollTop = thread.scrollHeight;
   });
 }
 
-// ---------- Menú (admin) ----------
+// ---------- Menu (admin) ----------
 async function cargarMenuAdmin() {
   const q = query(collection(db, "menu"));
   onSnapshot(q, snap => {
@@ -373,23 +373,23 @@ async function cargarMenuAdmin() {
 function renderMenuAdmin() {
   const list = document.getElementById("menuAdminList");
   if (menu.length === 0) {
-    list.innerHTML = `<p class="helper-text">Todavía no agregás platillos.</p>`;
+    list.innerHTML = `<p class="helper-text">You haven't added any menu items yet.</p>`;
     return;
   }
   list.innerHTML = menu.map(item => `
     <div class="menu-item">
       <div class="info">
-        <div class="name">${item.nombre} <span class="helper-text">(${item.categoria || "Menú"})</span></div>
+        <div class="name">${item.nombre} <span class="helper-text">(${item.categoria || "Menu"})</span></div>
         ${item.descripcion ? `<div class="desc">${item.descripcion}</div>` : ""}
-        <div class="price">Q${Number(item.precio).toFixed(2)} / persona</div>
+        <div class="price">$${Number(item.precio).toFixed(2)} / person</div>
       </div>
-      <button class="btn btn-ghost btn-sm del-menu-btn" data-id="${item.id}">Eliminar</button>
+      <button class="btn btn-ghost btn-sm del-menu-btn" data-id="${item.id}">Delete</button>
     </div>
   `).join("");
 
   list.querySelectorAll(".del-menu-btn").forEach(btn => {
     btn.addEventListener("click", async () => {
-      if (confirm("¿Eliminar este platillo del menú?")) {
+      if (confirm("Delete this menu item?")) {
         await deleteDoc(doc(db, "menu", btn.dataset.id));
       }
     });
@@ -402,17 +402,17 @@ document.getElementById("addMenuBtn").addEventListener("click", async () => {
   const precio = parseFloat(document.getElementById("mPrecio").value);
   const descripcion = document.getElementById("mDescripcion").value.trim();
 
-  if (!nombre || isNaN(precio)) { alert("Completá al menos nombre y precio."); return; }
+  if (!nombre || isNaN(precio)) { alert("Please fill in at least the name and price."); return; }
 
   await addDoc(collection(db, "menu"), {
-    categoria: categoria || "Menú", nombre, precio, descripcion: descripcion || null, activo: true
+    categoria: categoria || "Menu", nombre, precio, descripcion: descripcion || null, activo: true
   });
 
   document.getElementById("mCategoria").value = "";
   document.getElementById("mNombre").value = "";
   document.getElementById("mPrecio").value = "";
   document.getElementById("mDescripcion").value = "";
-  mostrarToast("Platillo agregado");
+  mostrarToast("Menu item added");
 });
 
 function mostrarToast(msg) {

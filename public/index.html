@@ -1,81 +1,81 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Cotización de Catering — So Italian Catering</title>
+<title>Catering Quote — So Italian Catering</title>
 <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
 
 <div class="topbar">
-  <div class="brand">So Italian Catering<small>Cotización en línea</small></div>
+  <div class="brand">So Italian Catering<small>Online Quote Request</small></div>
 </div>
 
 <div class="wrap-narrow">
 
   <div id="formView">
     <div class="card">
-      <div class="section-title">1. Datos del evento</div>
+      <div class="section-title">1. Event Details</div>
       <div class="field-row">
         <div class="field">
-          <label for="fecha">Fecha del evento</label>
+          <label for="fecha">Event date</label>
           <input type="date" id="fecha" required>
         </div>
         <div class="field">
-          <label for="personas">Número de personas</label>
-          <input type="number" id="personas" min="1" placeholder="Ej. 50" required>
+          <label for="personas">Number of guests</label>
+          <input type="number" id="personas" min="1" placeholder="e.g. 50" required>
         </div>
       </div>
       <div class="field">
-        <label for="lugar">Lugar / dirección del evento (opcional)</label>
-        <input type="text" id="lugar" placeholder="Ej. Salón Los Álamos, zona 10">
+        <label for="lugar">Event location / address (optional)</label>
+        <input type="text" id="lugar" placeholder="e.g. 123 Main St, Miami, FL">
       </div>
     </div>
 
     <div class="card">
-      <div class="section-title">2. Elegí tu menú</div>
+      <div class="section-title">2. Choose Your Menu</div>
       <div id="menuContainer">
-        <p class="helper-text">Cargando menú…</p>
+        <p class="helper-text">Loading menu…</p>
       </div>
     </div>
 
     <div class="card">
-      <div class="section-title">3. Tus datos de contacto</div>
+      <div class="section-title">3. Your Contact Information</div>
       <div class="field">
-        <label for="nombre">Nombre completo</label>
+        <label for="nombre">Full name</label>
         <input type="text" id="nombre" required>
       </div>
       <div class="field-row">
         <div class="field">
-          <label for="correo">Correo electrónico</label>
+          <label for="correo">Email address</label>
           <input type="email" id="correo" required>
         </div>
         <div class="field">
-          <label for="telefono">Teléfono / WhatsApp</label>
+          <label for="telefono">Phone / WhatsApp</label>
           <input type="tel" id="telefono" required>
         </div>
       </div>
       <div class="field">
-        <label for="notas">Comentarios adicionales (opcional)</label>
-        <textarea id="notas" rows="3" placeholder="Alergias, tipo de evento, preferencias..."></textarea>
+        <label for="notas">Additional comments (optional)</label>
+        <textarea id="notas" rows="3" placeholder="Allergies, event type, preferences..."></textarea>
       </div>
     </div>
 
     <div class="ticket" id="ticket">
-      <h4>Resumen de tu comanda</h4>
-      <div id="ticketLines"><div class="empty">Aún no elegís nada del menú</div></div>
-      <div class="line total-line"><span>Total estimado</span><span id="ticketTotal">Q0.00</span></div>
+      <h4>Your Order Summary</h4>
+      <div id="ticketLines"><div class="empty">You haven't selected anything yet</div></div>
+      <div class="line total-line"><span>Estimated total</span><span id="ticketTotal">$0.00</span></div>
       <div style="margin-top:14px;">
-        <button class="btn btn-primary" id="submitBtn" style="width:100%;" disabled>Enviar solicitud de cotización</button>
-        <p class="helper-text" style="text-align:center;">Es un precio previo. Una persona del equipo te contactará para confirmar detalles.</p>
+        <button class="btn btn-primary" id="submitBtn" style="width:100%;" disabled>Submit Quote Request</button>
+        <p class="helper-text" style="text-align:center;">This is a preliminary price. A member of our team will contact you to confirm the details.</p>
       </div>
     </div>
   </div>
 
   <div id="successView" class="card" style="display:none; text-align:center; padding:48px 24px;">
-    <div class="display" style="font-size:26px; margin-bottom:10px;">¡Listo, <span id="successName"></span>! 🍝</div>
-    <p>Recibimos tu solicitud de cotización. Te enviamos un resumen a <strong id="successEmail"></strong> y una persona de nuestro equipo se pondrá en contacto contigo pronto para confirmar los detalles.</p>
+    <div class="display" style="font-size:26px; margin-bottom:10px;">All set, <span id="successName"></span>! 🍝</div>
+    <p>We've received your quote request. A summary was sent to <strong id="successEmail"></strong>, and a member of our team will be in touch soon to confirm the details.</p>
   </div>
 
 </div>
@@ -85,7 +85,7 @@ import { db } from "./js/firebase-config.js";
 import { collection, addDoc, getDocs, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 let menuItems = [];
-const selected = {}; // itemId -> cantidad
+const selected = {}; // itemId -> selected (boolean)
 
 async function cargarMenu() {
   const container = document.getElementById("menuContainer");
@@ -96,13 +96,13 @@ async function cargarMenu() {
       .filter(i => i.activo !== false);
 
     if (menuItems.length === 0) {
-      container.innerHTML = `<p class="helper-text">Todavía no hay platillos cargados en el menú. Agregalos desde el panel de administración.</p>`;
+      container.innerHTML = `<p class="helper-text">No menu items yet. Add them from the admin dashboard.</p>`;
       return;
     }
 
     const categorias = {};
     menuItems.forEach(item => {
-      const cat = item.categoria || "Menú";
+      const cat = item.categoria || "Menu";
       if (!categorias[cat]) categorias[cat] = [];
       categorias[cat].push(item);
     });
@@ -115,7 +115,7 @@ async function cargarMenu() {
             <div class="info">
               <div class="name">${item.nombre}</div>
               ${item.descripcion ? `<div class="desc">${item.descripcion}</div>` : ""}
-              <div class="price">Q${Number(item.precio).toFixed(2)} / persona</div>
+              <div class="price">$${Number(item.precio).toFixed(2)} / person</div>
             </div>
             <input type="checkbox" class="menu-checkbox" id="chk-${item.id}" data-id="${item.id}" style="width:24px; height:24px; accent-color: var(--terracotta); flex-shrink:0;">
           </label>
@@ -130,7 +130,7 @@ async function cargarMenu() {
       });
     });
   } catch (err) {
-    container.innerHTML = `<p class="helper-text">No se pudo cargar el menú. Revisá la configuración de Firebase (js/firebase-config.js).</p>`;
+    container.innerHTML = `<p class="helper-text">Couldn't load the menu. Please check the Firebase configuration (js/firebase-config.js).</p>`;
     console.error(err);
   }
 }
@@ -144,8 +144,8 @@ function actualizarTicket() {
   const chosen = menuItems.filter(i => selected[i.id]);
 
   if (chosen.length === 0) {
-    lines.innerHTML = `<div class="empty">Aún no elegís nada del menú</div>`;
-    totalEl.textContent = "Q0.00";
+    lines.innerHTML = `<div class="empty">You haven't selected anything yet</div>`;
+    totalEl.textContent = "$0.00";
     submitBtn.disabled = true;
     return;
   }
@@ -154,9 +154,9 @@ function actualizarTicket() {
   lines.innerHTML = chosen.map(item => {
     const subtotal = item.precio * (personas || 1);
     total += subtotal;
-    return `<div class="line"><span>${item.nombre}${personas ? ` (${personas}p)` : ""}</span><span>Q${subtotal.toFixed(2)}</span></div>`;
+    return `<div class="line"><span>${item.nombre}${personas ? ` (${personas} guests)` : ""}</span><span>$${subtotal.toFixed(2)}</span></div>`;
   }).join("");
-  totalEl.textContent = `Q${total.toFixed(2)}`;
+  totalEl.textContent = `$${total.toFixed(2)}`;
   submitBtn.disabled = !(personas > 0);
 }
 
@@ -172,13 +172,13 @@ document.getElementById("submitBtn").addEventListener("click", async () => {
   const notas = document.getElementById("notas").value.trim();
 
   if (!fecha || !personas || !nombre || !correo || !telefono) {
-    alert("Por favor completá fecha, número de personas, nombre, correo y teléfono.");
+    alert("Please fill in the event date, number of guests, name, email, and phone.");
     return;
   }
 
   const chosen = menuItems.filter(i => selected[i.id]);
   if (chosen.length === 0) {
-    alert("Elegí al menos un platillo del menú.");
+    alert("Please select at least one menu item.");
     return;
   }
 
@@ -192,7 +192,7 @@ document.getElementById("submitBtn").addEventListener("click", async () => {
 
   const btn = document.getElementById("submitBtn");
   btn.disabled = true;
-  btn.textContent = "Enviando…";
+  btn.textContent = "Sending…";
 
   try {
     await addDoc(collection(db, "cotizaciones"), {
@@ -205,7 +205,7 @@ document.getElementById("submitBtn").addEventListener("click", async () => {
       items,
       total,
       notas: notas || null,
-      estado: "Nueva",
+      estado: "New",
       creadoEn: serverTimestamp(),
       actualizadoEn: serverTimestamp()
     });
@@ -216,9 +216,9 @@ document.getElementById("submitBtn").addEventListener("click", async () => {
     document.getElementById("successEmail").textContent = correo;
   } catch (err) {
     console.error(err);
-    alert("Hubo un problema enviando tu solicitud. Intentá de nuevo en un momento.");
+    alert("There was a problem sending your request. Please try again in a moment.");
     btn.disabled = false;
-    btn.textContent = "Enviar solicitud de cotización";
+    btn.textContent = "Submit Quote Request";
   }
 });
 
