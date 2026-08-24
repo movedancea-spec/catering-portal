@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Panel — So Italian Catering</title>
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+<div class="topbar">
+  <div class="brand">So Italian Catering<small>Panel de administración</small></div>
+  <button class="btn btn-ghost btn-sm" id="logoutBtn" style="display:none; color:#F7F1E4; border-color:#5a6f52;">Cerrar sesión</button>
+</div>
+
+<!-- LOGIN -->
+<div class="wrap-narrow" id="loginView">
+  <div class="card" style="max-width:380px; margin:60px auto 0;">
+    <div class="section-title">Iniciar sesión</div>
+    <div class="field">
+      <label for="loginEmail">Correo</label>
+      <input type="email" id="loginEmail">
+    </div>
+    <div class="field">
+      <label for="loginPass">Contraseña</label>
+      <input type="password" id="loginPass">
+    </div>
+    <button class="btn btn-primary" id="loginBtn" style="width:100%;">Entrar</button>
+    <p class="helper-text" id="loginError"></p>
+    <p class="helper-text">El usuario se crea desde Firebase Console → Authentication → Users.</p>
+  </div>
+</div>
+
+<!-- DASHBOARD -->
+<div class="wrap" id="dashView" style="display:none;">
+  <div class="tabs">
+    <div class="tab active" data-tab="cotizaciones">Cotizaciones</div>
+    <div class="tab" data-tab="menu">Menú</div>
+  </div>
+
+  <!-- Cotizaciones -->
+  <div id="tab-cotizaciones">
+    <div class="card" style="margin-bottom:16px; display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
+      <label style="margin:0;">Filtrar por estado:</label>
+      <select id="filtroEstado" style="width:auto;">
+        <option value="">Todas</option>
+        <option>Nueva</option>
+        <option>Contactado</option>
+        <option>Cotización enviada</option>
+        <option>Cerrada</option>
+        <option>Perdida</option>
+      </select>
+    </div>
+    <div class="card">
+      <div class="quote-row head">
+        <div>Cliente</div><div>Evento</div><div>Personas</div><div>Total</div><div>Estado</div><div></div>
+      </div>
+      <div id="quoteList"></div>
+    </div>
+  </div>
+
+  <!-- Menú -->
+  <div id="tab-menu" style="display:none;">
+    <div class="card" style="margin-bottom:16px;">
+      <div class="section-title">Agregar platillo</div>
+      <div class="field-row">
+        <div class="field"><label>Categoría</label><input type="text" id="mCategoria" placeholder="Ej. Entradas"></div>
+        <div class="field"><label>Nombre</label><input type="text" id="mNombre" placeholder="Ej. Lasagna clásica"></div>
+      </div>
+      <div class="field-row">
+        <div class="field"><label>Precio por persona (Q)</label><input type="number" id="mPrecio" step="0.01"></div>
+        <div class="field"><label>Descripción (opcional)</label><input type="text" id="mDescripcion"></div>
+      </div>
+      <button class="btn btn-primary" id="addMenuBtn">Agregar al menú</button>
+    </div>
+    <div class="card">
+      <div id="menuAdminList"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal detalle cotización -->
+<div class="overlay" id="detailOverlay" style="display:none;">
+  <div class="modal" id="detailModal"></div>
+</div>
+
+<div id="toastHost"></div>
+
+<script type="module">
+import { db, auth } from "./js/firebase-config.js";
+import {
+  collection, doc, getDocs, addDoc, updateDoc, deleteDoc, query, orderBy,
+  onSnapshot, serverTimestamp
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import {
+  signInWithEmailAndPassword, onAuthStateChanged, signOut
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js";
+
+const functions = getFunctions();
+const sendMessageToClient = httpsCallable(functions, "sendMessageToClient");
+const sendStatusUpdateEmail = httpsCallable(functions, "sendStatusUpdateEmail");
+
+const ESTADOS = ["Nueva", "Contactado", "Cotización enviada", "Cerrada", "Perdida"];
+const badgeClass = e => ({
+  "Nueva": "badge-nueva", "Contactado": "badge-contactado",
+  "Cotización enviada": "badge-enviada", "Cerrada": "badge-cerrada", "Perdida": "badge-perdida"
+}[e] || "badge-nueva");
+
+let quotes = [];
+let menu = [];
+let currentQuoteId = null;
+
+// ---------- Auth ----------
+document.getElementById("loginBtn").addEventListener("click", async () => {
+  const email = document.getElementById("loginEmail").value.trim();
+  const pass = document.getElementById("loginPass").value;
+  try {
+    await signInWithEmailAndPassword(auth, email, pass);
+  } catch (err) {
+    document.getElementById("loginError").textContent = "Correo o contraseña incorrectos.";
+  }
+});
+document.getElementById("logoutBtn").addEventListener("click", () => signOut(auth));
+
+onAuthStateChanged(auth, user => {
+  document.getElementById("loginView").style.display = user ? "none" : "block";
+  document.getElementById("dashView").style.display = user ? "block" : "none";
+  document.getElementById("logoutBtn").style.display = user ? "inline-flex" : "none";
+  if (user) { escucharCotizaciones(); cargarMenuAdmin(); }
+});
+
+// ---------- Tabs ----------
+document.querySelectorAll(".tab").forEach(tab => {
+  tab.addEventListener("click", () => {
+    document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+    tab.classList.add("active");
+    document.getElementById("tab-cotizaciones").style.display = tab.dataset.tab === "cotizaciones" ? "block" : "none";
+    document.getElementById("tab-menu").style.display = tab.dataset.tab === "menu" ? "block" : "none";
+  });
+});
+
+// ---------- Cotizaciones ----------
+function escucharCotizaciones() {
+  const q = query(collection(db, "cotizaciones"), orderBy("creadoEn", "desc"));
+  onSnapshot(q, snap => {
+    quotes = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    renderQuotes();
+  });
+}
+
+document.getElementById("filtroEstado").addEventListener("change", renderQuotes);
+
+function renderQuotes() {
+  const filtro = document.getElementById("filtroEstado").value;
+  const list = document.getElementById("quoteList");
+  const filtered = filtro ? quotes.filter(q => q.estado === filtro) : quotes;
+
+  if (filtered.length === 0) {
+    list.innerHTML = `<div class="empty-state"><div class="display">Sin cotizaciones aún</div><p>En cuanto un cliente llene el formulario, aparece aquí.</p></div>`;
+    return;
+  }
+
+  list.innerHTML = filtered.map(q => `
+    <div class="quote-row" data-id="${q.id}">
+      <div><strong>${q.clienteNombre}</strong><br><span class="helper-text">${q.clienteEmail}</span></div>
+      <div>${q.fechaEvento || "—"}</div>
+      <div>${q.numPersonas || "—"}</div>
+      <div>Q${Number(q.total || 0).toFixed(2)}</div>
+      <div><span class="badge ${badgeClass(q.estado)}">${q.estado}</span></div>
+      <div><button class="btn btn-ghost btn-sm view-btn" data-id="${q.id}">Ver</button></div>
+    </div>
+  `).join("");
+
+  list.querySelectorAll(".view-btn").forEach(btn => {
+    btn.addEventListener("click", () => abrirDetalle(btn.dataset.id));
+  });
+}
+
+async function abrirDetalle(id) {
+  currentQuoteId = id;
+  const q = quotes.find(x => x.id === id);
+  if (!q) return;
+
+  const modal = document.getElementById("detailModal");
+  modal.innerHTML = `
+    <div class="section-title">Cotización de ${q.clienteNombre}</div>
+    <p class="helper-text">${q.clienteEmail} · ${q.clienteTelefono}</p>
+    <p><strong>Evento:</strong> ${q.fechaEvento || "—"} — ${q.numPersonas} personas ${q.lugar ? `· ${q.lugar}` : ""}</p>
+    <div class="ticket" style="position:static;">
+      <h4>Detalle</h4>
+      <div>${(q.items || []).map(i => `<div class="line"><span>${i.nombre} × ${i.cantidad}</span><span>Q${(i.precio*i.cantidad*q.numPersonas).toFixed(2)}</span></div>`).join("")}</div>
+      <div class="line total-line"><span>Total</span><span>Q${Number(q.total||0).toFixed(2)}</span></div>
+    </div>
+    ${q.notas ? `<p style="margin-top:12px;"><strong>Notas del cliente:</strong> ${q.notas}</p>` : ""}
+
+    <div class="field" style="margin-top:16px;">
+      <label>Estado</label>
+      <select id="estadoSelect">
+        ${ESTADOS.map(e => `<option ${e === q.estado ? "selected" : ""}>${e}</option>`).join("")}
+      </select>
+    </div>
+    <label style="display:flex; align-items:center; gap:6px; font-weight:400; margin-bottom:16px;">
+      <input type="checkbox" id="notificarCliente" style="width:auto;" checked>
+      Avisar al cliente por correo del cambio de estado
+    </label>
+
+    <div class="section-title">Mensajes</div>
+    <div class="msg-thread" id="msgThread"><p class="helper-text">Cargando…</p></div>
+    <div class="field">
+      <textarea id="nuevoMensaje" rows="2" placeholder="Escribí un mensaje para el cliente…"></textarea>
+    </div>
+    <div style="display:flex; gap:10px; justify-content:flex-end;">
+      <button class="btn btn-ghost btn-sm" id="closeModalBtn">Cerrar</button>
+      <button class="btn btn-ghost btn-sm" id="sendMsgBtn">Enviar mensaje</button>
+      <button class="btn btn-primary btn-sm" id="saveEstadoBtn">Guardar estado</button>
+    </div>
+  `;
+
+  document.getElementById("detailOverlay").style.display = "flex";
+  document.getElementById("closeModalBtn").addEventListener("click", () => {
+    document.getElementById("detailOverlay").style.display = "none";
+  });
+
+  document.getElementById("saveEstadoBtn").addEventListener("click", async () => {
+    const nuevoEstado = document.getElementById("estadoSelect").value;
+    const notificar = document.getElementById("notificarCliente").checked;
+    await updateDoc(doc(db, "cotizaciones", id), { estado: nuevoEstado, actualizadoEn: serverTimestamp() });
+    if (notificar) {
+      try { await sendStatusUpdateEmail({ quoteId: id, nuevoEstado }); } catch (e) { console.error(e); }
+    }
+    mostrarToast("Estado actualizado");
+    document.getElementById("detailOverlay").style.display = "none";
+  });
+
+  document.getElementById("sendMsgBtn").addEventListener("click", async () => {
+    const texto = document.getElementById("nuevoMensaje").value.trim();
+    if (!texto) return;
+    const btn = document.getElementById("sendMsgBtn");
+    btn.disabled = true;
+    try {
+      await addDoc(collection(db, "cotizaciones", id, "mensajes"), {
+        autor: "dueño", texto, fecha: serverTimestamp()
+      });
+      await sendMessageToClient({ quoteId: id, texto });
+      document.getElementById("nuevoMensaje").value = "";
+      mostrarToast("Mensaje enviado por correo");
+    } catch (e) {
+      console.error(e);
+      alert("No se pudo enviar el mensaje.");
+    }
+    btn.disabled = false;
+  });
+
+  escucharMensajes(id);
+}
+
+function escucharMensajes(id) {
+  const q = query(collection(db, "cotizaciones", id, "mensajes"), orderBy("fecha", "asc"));
+  onSnapshot(q, snap => {
+    const thread = document.getElementById("msgThread");
+    if (!thread) return;
+    if (snap.empty) { thread.innerHTML = `<p class="helper-text">Sin mensajes todavía.</p>`; return; }
+    thread.innerHTML = snap.docs.map(d => {
+      const m = d.data();
+      return `<div class="msg msg-${m.autor === "dueño" ? "dueño" : "cliente"}">${m.texto}</div>`;
+    }).join("");
+    thread.scrollTop = thread.scrollHeight;
+  });
+}
+
+// ---------- Menú (admin) ----------
+async function cargarMenuAdmin() {
+  const q = query(collection(db, "menu"));
+  onSnapshot(q, snap => {
+    menu = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    renderMenuAdmin();
+  });
+}
+
+function renderMenuAdmin() {
+  const list = document.getElementById("menuAdminList");
+  if (menu.length === 0) {
+    list.innerHTML = `<p class="helper-text">Todavía no agregás platillos.</p>`;
+    return;
+  }
+  list.innerHTML = menu.map(item => `
+    <div class="menu-item">
+      <div class="info">
+        <div class="name">${item.nombre} <span class="helper-text">(${item.categoria || "Menú"})</span></div>
+        ${item.descripcion ? `<div class="desc">${item.descripcion}</div>` : ""}
+        <div class="price">Q${Number(item.precio).toFixed(2)} / persona</div>
+      </div>
+      <button class="btn btn-ghost btn-sm del-menu-btn" data-id="${item.id}">Eliminar</button>
+    </div>
+  `).join("");
+
+  list.querySelectorAll(".del-menu-btn").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      if (confirm("¿Eliminar este platillo del menú?")) {
+        await deleteDoc(doc(db, "menu", btn.dataset.id));
+      }
+    });
+  });
+}
+
+document.getElementById("addMenuBtn").addEventListener("click", async () => {
+  const categoria = document.getElementById("mCategoria").value.trim();
+  const nombre = document.getElementById("mNombre").value.trim();
+  const precio = parseFloat(document.getElementById("mPrecio").value);
+  const descripcion = document.getElementById("mDescripcion").value.trim();
+
+  if (!nombre || isNaN(precio)) { alert("Completá al menos nombre y precio."); return; }
+
+  await addDoc(collection(db, "menu"), {
+    categoria: categoria || "Menú", nombre, precio, descripcion: descripcion || null, activo: true
+  });
+
+  document.getElementById("mCategoria").value = "";
+  document.getElementById("mNombre").value = "";
+  document.getElementById("mPrecio").value = "";
+  document.getElementById("mDescripcion").value = "";
+  mostrarToast("Platillo agregado");
+});
+
+function mostrarToast(msg) {
+  const host = document.getElementById("toastHost");
+  const t = document.createElement("div");
+  t.className = "toast";
+  t.textContent = msg;
+  host.appendChild(t);
+  setTimeout(() => t.remove(), 2500);
+}
+</script>
+
+</body>
+</html>

@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cotización de Catering — So Italian Catering</title>
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+<div class="topbar">
+  <div class="brand">So Italian Catering<small>Cotización en línea</small></div>
+</div>
+
+<div class="wrap-narrow">
+
+  <div id="formView">
+    <div class="card">
+      <div class="section-title">1. Datos del evento</div>
+      <div class="field-row">
+        <div class="field">
+          <label for="fecha">Fecha del evento</label>
+          <input type="date" id="fecha" required>
+        </div>
+        <div class="field">
+          <label for="personas">Número de personas</label>
+          <input type="number" id="personas" min="1" placeholder="Ej. 50" required>
+        </div>
+      </div>
+      <div class="field">
+        <label for="lugar">Lugar / dirección del evento (opcional)</label>
+        <input type="text" id="lugar" placeholder="Ej. Salón Los Álamos, zona 10">
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="section-title">2. Elegí tu menú</div>
+      <div id="menuContainer">
+        <p class="helper-text">Cargando menú…</p>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="section-title">3. Tus datos de contacto</div>
+      <div class="field">
+        <label for="nombre">Nombre completo</label>
+        <input type="text" id="nombre" required>
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label for="correo">Correo electrónico</label>
+          <input type="email" id="correo" required>
+        </div>
+        <div class="field">
+          <label for="telefono">Teléfono / WhatsApp</label>
+          <input type="tel" id="telefono" required>
+        </div>
+      </div>
+      <div class="field">
+        <label for="notas">Comentarios adicionales (opcional)</label>
+        <textarea id="notas" rows="3" placeholder="Alergias, tipo de evento, preferencias..."></textarea>
+      </div>
+    </div>
+
+    <div class="ticket" id="ticket">
+      <h4>Resumen de tu comanda</h4>
+      <div id="ticketLines"><div class="empty">Aún no elegís nada del menú</div></div>
+      <div class="line total-line"><span>Total estimado</span><span id="ticketTotal">Q0.00</span></div>
+      <div style="margin-top:14px;">
+        <button class="btn btn-primary" id="submitBtn" style="width:100%;" disabled>Enviar solicitud de cotización</button>
+        <p class="helper-text" style="text-align:center;">Es un precio previo. Una persona del equipo te contactará para confirmar detalles.</p>
+      </div>
+    </div>
+  </div>
+
+  <div id="successView" class="card" style="display:none; text-align:center; padding:48px 24px;">
+    <div class="display" style="font-size:26px; margin-bottom:10px;">¡Listo, <span id="successName"></span>! 🍝</div>
+    <p>Recibimos tu solicitud de cotización. Te enviamos un resumen a <strong id="successEmail"></strong> y una persona de nuestro equipo se pondrá en contacto contigo pronto para confirmar los detalles.</p>
+  </div>
+
+</div>
+
+<script type="module">
+import { db } from "./js/firebase-config.js";
+import { collection, addDoc, getDocs, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+let menuItems = [];
+const selected = {}; // itemId -> cantidad
+
+async function cargarMenu() {
+  const container = document.getElementById("menuContainer");
+  try {
+    const snap = await getDocs(collection(db, "menu"));
+    menuItems = snap.docs
+      .map(d => ({ id: d.id, ...d.data() }))
+      .filter(i => i.activo !== false);
+
+    if (menuItems.length === 0) {
+      container.innerHTML = `<p class="helper-text">Todavía no hay platillos cargados en el menú. Agregalos desde el panel de administración.</p>`;
+      return;
+    }
+
+    const categorias = {};
+    menuItems.forEach(item => {
+      const cat = item.categoria || "Menú";
+      if (!categorias[cat]) categorias[cat] = [];
+      categorias[cat].push(item);
+    });
+
+    container.innerHTML = Object.entries(categorias).map(([cat, items]) => `
+      <div class="menu-category">
+        <h3>${cat}</h3>
+        ${items.map(item => `
+          <div class="menu-item">
+            <div class="info">
+              <div class="name">${item.nombre}</div>
+              ${item.descripcion ? `<div class="desc">${item.descripcion}</div>` : ""}
+              <div class="price">Q${Number(item.precio).toFixed(2)} / persona</div>
+            </div>
+            <div class="qty-control">
+              <button type="button" data-id="${item.id}" data-dir="-1">−</button>
+              <span class="qty-val" id="qty-${item.id}">0</span>
+              <button type="button" data-id="${item.id}" data-dir="1">+</button>
+            </div>
+          </div>
+        `).join("")}
+      </div>
+    `).join("");
+
+    container.querySelectorAll("button[data-id]").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const id = btn.dataset.id;
+        const dir = parseInt(btn.dataset.dir, 10);
+        const current = selected[id] || 0;
+        const next = Math.max(0, current + dir);
+        selected[id] = next;
+        document.getElementById(`qty-${id}`).textContent = next;
+        actualizarTicket();
+      });
+    });
+  } catch (err) {
+    container.innerHTML = `<p class="helper-text">No se pudo cargar el menú. Revisá la configuración de Firebase (js/firebase-config.js).</p>`;
+    console.error(err);
+  }
+}
+
+function actualizarTicket() {
+  const lines = document.getElementById("ticketLines");
+  const totalEl = document.getElementById("ticketTotal");
+  const submitBtn = document.getElementById("submitBtn");
+  const personas = parseInt(document.getElementById("personas").value, 10) || 0;
+
+  const chosen = menuItems.filter(i => (selected[i.id] || 0) > 0);
+
+  if (chosen.length === 0) {
+    lines.innerHTML = `<div class="empty">Aún no elegís nada del menú</div>`;
+    totalEl.textContent = "Q0.00";
+    submitBtn.disabled = true;
+    return;
+  }
+
+  let total = 0;
+  lines.innerHTML = chosen.map(item => {
+    const qty = selected[item.id];
+    const perPersonSubtotal = item.precio * qty * (personas || 1);
+    total += perPersonSubtotal;
+    return `<div class="line"><span>${item.nombre} × ${qty}${personas ? ` (${personas}p)` : ""}</span><span>Q${perPersonSubtotal.toFixed(2)}</span></div>`;
+  }).join("");
+  totalEl.textContent = `Q${total.toFixed(2)}`;
+  submitBtn.disabled = !(personas > 0);
+}
+
+document.getElementById("personas").addEventListener("input", actualizarTicket);
+
+document.getElementById("submitBtn").addEventListener("click", async () => {
+  const fecha = document.getElementById("fecha").value;
+  const personas = parseInt(document.getElementById("personas").value, 10);
+  const lugar = document.getElementById("lugar").value.trim();
+  const nombre = document.getElementById("nombre").value.trim();
+  const correo = document.getElementById("correo").value.trim();
+  const telefono = document.getElementById("telefono").value.trim();
+  const notas = document.getElementById("notas").value.trim();
+
+  if (!fecha || !personas || !nombre || !correo || !telefono) {
+    alert("Por favor completá fecha, número de personas, nombre, correo y teléfono.");
+    return;
+  }
+
+  const chosen = menuItems.filter(i => (selected[i.id] || 0) > 0);
+  if (chosen.length === 0) {
+    alert("Elegí al menos un platillo del menú.");
+    return;
+  }
+
+  const items = chosen.map(i => ({
+    menuId: i.id,
+    nombre: i.nombre,
+    precio: i.precio,
+    cantidad: selected[i.id]
+  }));
+  const total = items.reduce((sum, i) => sum + i.precio * i.cantidad * personas, 0);
+
+  const btn = document.getElementById("submitBtn");
+  btn.disabled = true;
+  btn.textContent = "Enviando…";
+
+  try {
+    await addDoc(collection(db, "cotizaciones"), {
+      clienteNombre: nombre,
+      clienteEmail: correo,
+      clienteTelefono: telefono,
+      fechaEvento: fecha,
+      lugar: lugar || null,
+      numPersonas: personas,
+      items,
+      total,
+      notas: notas || null,
+      estado: "Nueva",
+      creadoEn: serverTimestamp(),
+      actualizadoEn: serverTimestamp()
+    });
+
+    document.getElementById("formView").style.display = "none";
+    document.getElementById("successView").style.display = "block";
+    document.getElementById("successName").textContent = nombre.split(" ")[0];
+    document.getElementById("successEmail").textContent = correo;
+  } catch (err) {
+    console.error(err);
+    alert("Hubo un problema enviando tu solicitud. Intentá de nuevo en un momento.");
+    btn.disabled = false;
+    btn.textContent = "Enviar solicitud de cotización";
+  }
+});
+
+cargarMenu();
+</script>
+
+</body>
+</html>

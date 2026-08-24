@@ -1,0 +1,369 @@
+/* ========================================================================
+   So Italian Catering — sistema visual
+   Paleta: albahaca oscura, terracota, crema de trattoria, espresso, oro
+   Tipografía: Fraunces (display, con carácter) + Work Sans (cuerpo/UI)
+   Firma: el resumen de cotización se dibuja como una "comanda" de cocina
+   ======================================================================== */
+
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Work+Sans:wght@400;500;600;700&display=swap');
+
+:root {
+  --basil: #33482E;
+  --basil-dark: #23331F;
+  --terracotta: #C4622D;
+  --terracotta-dark: #A34E22;
+  --cream: #F7F1E4;
+  --paper: #FFFDF8;
+  --espresso: #2B2119;
+  --gold: #D4A24C;
+  --line: #E4DAC4;
+
+  --status-nueva: #3E6DBB;
+  --status-contactado: #C99A2E;
+  --status-enviada: #7A4FB5;
+  --status-cerrada: #3E8E5A;
+  --status-perdida: #8A8378;
+
+  --radius: 10px;
+  --shadow: 0 8px 24px rgba(43, 33, 25, 0.10);
+  --font-display: 'Fraunces', serif;
+  --font-body: 'Work Sans', sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: var(--font-body);
+  background: var(--cream);
+  color: var(--espresso);
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3, .display {
+  font-family: var(--font-display);
+  font-weight: 600;
+  color: var(--basil-dark);
+  margin: 0;
+}
+
+a { color: var(--terracotta); }
+
+/* ---------- Layout shells ---------- */
+
+.topbar {
+  background: var(--basil-dark);
+  color: var(--cream);
+  padding: 18px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.topbar .brand {
+  font-family: var(--font-display);
+  font-size: 22px;
+  letter-spacing: 0.3px;
+}
+
+.topbar .brand small {
+  display: block;
+  font-family: var(--font-body);
+  font-size: 11px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--gold);
+  font-weight: 600;
+  margin-top: 2px;
+}
+
+.wrap {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 32px 20px 80px;
+}
+
+.wrap-narrow {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 32px 20px 120px;
+}
+
+/* ---------- Cards / panels ---------- */
+
+.card {
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 24px;
+  box-shadow: var(--shadow);
+}
+
+.card + .card { margin-top: 20px; }
+
+.section-title {
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 1.2px;
+  color: var(--terracotta-dark);
+  font-weight: 700;
+  margin-bottom: 12px;
+}
+
+/* ---------- Form elements ---------- */
+
+label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--basil-dark);
+  margin-bottom: 6px;
+}
+
+input[type="text"], input[type="email"], input[type="tel"], input[type="date"],
+input[type="number"], input[type="password"], textarea, select {
+  width: 100%;
+  padding: 11px 13px;
+  border: 1.5px solid var(--line);
+  border-radius: 8px;
+  font-family: var(--font-body);
+  font-size: 14.5px;
+  background: var(--paper);
+  color: var(--espresso);
+}
+
+input:focus, textarea:focus, select:focus {
+  outline: 2px solid var(--terracotta);
+  outline-offset: 1px;
+  border-color: var(--terracotta);
+}
+
+.field { margin-bottom: 16px; }
+.field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+@media (max-width: 560px) { .field-row { grid-template-columns: 1fr; } }
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 22px;
+  border-radius: 8px;
+  border: none;
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 14.5px;
+  cursor: pointer;
+  transition: transform 0.08s ease, box-shadow 0.15s ease;
+}
+.btn:active { transform: translateY(1px); }
+.btn-primary { background: var(--terracotta); color: #fff; }
+.btn-primary:hover { background: var(--terracotta-dark); }
+.btn-ghost { background: transparent; color: var(--basil-dark); border: 1.5px solid var(--line); }
+.btn-ghost:hover { border-color: var(--basil); }
+.btn-sm { padding: 7px 14px; font-size: 13px; }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* ---------- Menu picker ---------- */
+
+.menu-category { margin-bottom: 22px; }
+.menu-category h3 {
+  font-size: 17px;
+  border-bottom: 2px solid var(--gold);
+  padding-bottom: 6px;
+  margin-bottom: 10px;
+}
+
+.menu-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 10px 0;
+  border-bottom: 1px dashed var(--line);
+}
+.menu-item:last-child { border-bottom: none; }
+
+.menu-item .info { flex: 1; }
+.menu-item .name { font-weight: 600; font-size: 14.5px; }
+.menu-item .desc { font-size: 12.5px; color: #6b6153; margin-top: 2px; }
+.menu-item .price { font-size: 13px; color: var(--terracotta-dark); font-weight: 600; margin-top: 3px; }
+
+.qty-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.qty-control button {
+  width: 30px; height: 30px;
+  border-radius: 50%;
+  border: 1.5px solid var(--basil);
+  background: var(--paper);
+  color: var(--basil-dark);
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+  line-height: 1;
+}
+.qty-control button:hover { background: var(--basil); color: #fff; }
+.qty-control .qty-val { min-width: 22px; text-align: center; font-weight: 700; }
+
+/* ---------- The "comanda" ticket (signature element) ---------- */
+
+.ticket {
+  position: sticky;
+  bottom: 16px;
+  background: var(--paper);
+  border-radius: 4px;
+  padding: 20px 20px 16px;
+  box-shadow: var(--shadow);
+  font-family: 'Courier New', monospace;
+  border-top: 3px dashed var(--espresso);
+  background-image:
+    radial-gradient(circle at 8px 0, transparent 7px, var(--paper) 8px);
+  background-position: top left;
+  background-size: 16px 8px;
+  background-repeat: repeat-x;
+}
+
+.ticket h4 {
+  margin: 0 0 10px;
+  text-align: center;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  font-size: 12px;
+  color: var(--espresso);
+}
+
+.ticket .line {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  padding: 3px 0;
+  color: var(--espresso);
+}
+
+.ticket .total-line {
+  border-top: 1px dashed var(--espresso);
+  margin-top: 8px;
+  padding-top: 8px;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.ticket .empty { text-align: center; font-size: 12.5px; color: #8a8378; padding: 8px 0; }
+
+/* ---------- Status badges ---------- */
+
+.badge {
+  display: inline-block;
+  padding: 4px 11px;
+  border-radius: 20px;
+  font-size: 11.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: #fff;
+}
+.badge-nueva { background: var(--status-nueva); }
+.badge-contactado { background: var(--status-contactado); }
+.badge-enviada { background: var(--status-enviada); }
+.badge-cerrada { background: var(--status-cerrada); }
+.badge-perdida { background: var(--status-perdida); }
+
+/* ---------- Admin table / list ---------- */
+
+.tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 20px;
+  border-bottom: 2px solid var(--line);
+}
+.tab {
+  padding: 10px 18px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 14px;
+  color: #8a8378;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+}
+.tab.active { color: var(--terracotta-dark); border-bottom-color: var(--terracotta); }
+
+.quote-row {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr 0.8fr 0.9fr 1fr auto;
+  gap: 12px;
+  align-items: center;
+  padding: 14px 4px;
+  border-bottom: 1px solid var(--line);
+  font-size: 14px;
+}
+.quote-row.head {
+  font-size: 11.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: #8a8378;
+  font-weight: 700;
+}
+@media (max-width: 800px) {
+  .quote-row { grid-template-columns: 1fr; gap: 4px; padding: 16px 4px; }
+  .quote-row.head { display: none; }
+}
+
+.empty-state {
+  text-align: center;
+  padding: 60px 20px;
+  color: #8a8378;
+}
+.empty-state .display { font-size: 22px; margin-bottom: 8px; color: var(--basil-dark); }
+
+/* ---------- Message thread ---------- */
+
+.msg-thread { display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px; max-height: 320px; overflow-y: auto; }
+.msg {
+  max-width: 78%;
+  padding: 10px 14px;
+  border-radius: 12px;
+  font-size: 13.5px;
+  line-height: 1.4;
+}
+.msg-dueño { align-self: flex-end; background: var(--basil); color: #fff; border-bottom-right-radius: 3px; }
+.msg-cliente { align-self: flex-start; background: var(--cream); border: 1px solid var(--line); border-bottom-left-radius: 3px; }
+.msg .meta { display: block; font-size: 10.5px; opacity: 0.7; margin-top: 4px; }
+
+.toast {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--basil-dark);
+  color: #fff;
+  padding: 12px 22px;
+  border-radius: 8px;
+  font-size: 14px;
+  box-shadow: var(--shadow);
+  z-index: 999;
+}
+
+.helper-text { font-size: 12.5px; color: #8a8378; margin-top: 4px; }
+
+.overlay {
+  position: fixed; inset: 0;
+  background: rgba(43,33,25,0.55);
+  display: flex; align-items: flex-start; justify-content: center;
+  padding: 40px 16px;
+  overflow-y: auto;
+  z-index: 100;
+}
+.modal {
+  background: var(--paper);
+  border-radius: var(--radius);
+  max-width: 640px;
+  width: 100%;
+  padding: 28px;
+  box-shadow: var(--shadow);
+}
