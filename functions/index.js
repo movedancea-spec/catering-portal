@@ -50,6 +50,58 @@ function itemsHtml(items, personas) {
 }
 
 // ------------------------------------------------------------------
+// Email template settings: logo, business name, intro/policies/footer
+// text, editable anytime from the dashboard's "Email Template" tab.
+// Every quote email is built from these settings, with sensible
+// defaults if the owner hasn't customized anything yet.
+// ------------------------------------------------------------------
+const DEFAULT_TEMPLATE = {
+  businessName: "So Italian Catering",
+  introText: "Hi {clientName}, thanks for your interest! Here's a preliminary summary of your quote:",
+  policiesText: "",
+  footerText: "Thank you for considering us for your event!",
+  logoUrl: null
+};
+
+async function getTemplateSettings() {
+  const snap = await db.collection("settings").doc("quoteEmail").get();
+  return snap.exists ? { ...DEFAULT_TEMPLATE, ...snap.data() } : { ...DEFAULT_TEMPLATE };
+}
+
+// Builds the shared quote-email HTML using the current template settings.
+// `heading` / `statusLine` / `disclaimer` are optional extras used by the
+// different email types (new quote vs. update vs. plain message).
+function buildQuoteEmailHtml(q, settings, { heading, statusLine, disclaimer } = {}) {
+  const logoHtml = settings.logoUrl
+    ? `<img src="${settings.logoUrl}" alt="${settings.businessName}" style="max-height:70px; margin-bottom:14px; display:block;">`
+    : `<h2 style="color:#33482E; margin-top:0;">${settings.businessName}</h2>`;
+
+  const intro = (settings.introText || DEFAULT_TEMPLATE.introText).replace("{clientName}", q.clienteNombre);
+
+  const policiesHtml = settings.policiesText
+    ? `<div style="margin-top:16px; padding:14px; background:#F7F1E4; border-radius:8px;"><strong style="color:#33482E;">Policies</strong><p style="white-space:pre-line; margin:6px 0 0; font-size:14px;">${settings.policiesText}</p></div>`
+    : "";
+
+  return `
+    <div style="font-family:sans-serif; color:#2B2119; max-width:560px;">
+      ${logoHtml}
+      ${heading ? `<h3 style="color:#33482E;">${heading}</h3>` : ""}
+      <p>${intro}</p>
+      <p><strong>Event date:</strong> ${q.fechaEvento}<br>
+         <strong>Number of guests:</strong> ${q.numPersonas}${statusLine ? `<br><strong>Status:</strong> ${statusLine}` : ""}</p>
+      <table style="width:100%; border-collapse:collapse; margin:12px 0;">
+        ${itemsHtml(q.items, q.numPersonas)}
+        <tr><td style="padding:8px; font-weight:bold; border-top:2px solid #33482E;">Total</td>
+            <td style="padding:8px; font-weight:bold; text-align:right; border-top:2px solid #33482E;">${fmtPrice(q.total)}</td></tr>
+      </table>
+      ${disclaimer ? `<p><strong>${disclaimer}</strong></p>` : ""}
+      ${policiesHtml}
+      <p style="margin-top:16px;">${settings.footerText}</p>
+    </div>
+  `;
+}
+
+// ------------------------------------------------------------------
 // 1. Triggers automatically when a client submits the form.
 //    Sends: (a) preliminary quote to the client, (b) alert to the owner.
 // ------------------------------------------------------------------
@@ -58,22 +110,11 @@ exports.onCotizacionCreated = onDocumentCreated(
   async (event) => {
     const q = event.data.data();
     const apiKey = RESEND_API_KEY.value();
+    const settings = await getTemplateSettings();
 
-    const resumenHtml = `
-      <div style="font-family:sans-serif; color:#2B2119;">
-        <h2 style="color:#33482E;">So Italian Catering</h2>
-        <p>Hi ${q.clienteNombre}, thanks for your interest! Here's a preliminary summary of your quote:</p>
-        <p><strong>Event date:</strong> ${q.fechaEvento}<br>
-           <strong>Number of guests:</strong> ${q.numPersonas}</p>
-        <table style="width:100%; border-collapse:collapse; margin:12px 0;">
-          ${itemsHtml(q.items, q.numPersonas)}
-          <tr><td style="padding:8px; font-weight:bold; border-top:2px solid #33482E;">Estimated total</td>
-              <td style="padding:8px; font-weight:bold; text-align:right; border-top:2px solid #33482E;">${fmtPrice(q.total)}</td></tr>
-        </table>
-        <p><strong>This is a preliminary price, not a final confirmation.</strong> A member of our team will be in touch soon to confirm all the details.</p>
-        <p>Thank you for considering us for your event!</p>
-      </div>
-    `;
+    const resumenHtml = buildQuoteEmailHtml(q, settings, {
+      disclaimer: "This is a preliminary price, not a final confirmation. A member of our team will be in touch soon to confirm all the details."
+    });
 
     await enviarCorreo({
       to: q.clienteEmail,
@@ -112,6 +153,7 @@ exports.sendMessageToClient = onCall(
     const snap = await db.collection("cotizaciones").doc(quoteId).get();
     if (!snap.exists) throw new Error("Quote not found");
     const q = snap.data();
+    const settings = await getTemplateSettings();
 
     const adjuntoHtml = adjuntoUrl
       ? `<p><a href="${adjuntoUrl}" style="color:#33482E; font-weight:bold;">📎 View attached file${adjuntoNombre ? `: ${adjuntoNombre}` : ""}</a></p>`
@@ -127,10 +169,14 @@ exports.sendMessageToClient = onCall(
         </table>`
       : "";
 
+    const logoHtml = settings.logoUrl
+      ? `<img src="${settings.logoUrl}" alt="${settings.businessName}" style="max-height:60px; margin-bottom:12px; display:block;">`
+      : "";
+
     await enviarCorreo({
       to: q.clienteEmail,
-      subject: `New message about your quote — So Italian Catering`,
-      html: `<div style="font-family:sans-serif;"><p>Hi ${q.clienteNombre},</p><p>${texto || ""}</p>${cotizacionHtml}${adjuntoHtml}<p>— So Italian Catering</p></div>`,
+      subject: `New message about your quote — ${settings.businessName}`,
+      html: `<div style="font-family:sans-serif; color:#2B2119;">${logoHtml}<p>Hi ${q.clienteNombre},</p><p>${texto || ""}</p>${cotizacionHtml}${adjuntoHtml}<p>— ${settings.businessName}</p></div>`,
       apiKey: RESEND_API_KEY.value()
     });
 
@@ -153,27 +199,16 @@ exports.sendStatusUpdateEmail = onCall(
     const snap = await db.collection("cotizaciones").doc(quoteId).get();
     if (!snap.exists) throw new Error("Quote not found");
     const q = snap.data();
+    const settings = await getTemplateSettings();
 
-    const html = `
-      <div style="font-family:sans-serif; color:#2B2119;">
-        <h2 style="color:#33482E;">So Italian Catering</h2>
-        <p>Hi ${q.clienteNombre}, your quote has been updated. Here's the latest summary:</p>
-        <p><strong>Event date:</strong> ${q.fechaEvento}<br>
-           <strong>Number of guests:</strong> ${q.numPersonas}<br>
-           <strong>Status:</strong> ${nuevoEstado}</p>
-        <table style="width:100%; border-collapse:collapse; margin:12px 0;">
-          ${itemsHtml(q.items, q.numPersonas)}
-          <tr><td style="padding:8px; font-weight:bold; border-top:2px solid #33482E;">Updated total</td>
-              <td style="padding:8px; font-weight:bold; text-align:right; border-top:2px solid #33482E;">${fmtPrice(q.total)}</td></tr>
-        </table>
-        <p>Any questions, just reply to this email or reach out through this channel.</p>
-        <p>— So Italian Catering</p>
-      </div>
-    `;
+    const html = buildQuoteEmailHtml(q, settings, {
+      heading: "Your quote has been updated",
+      statusLine: nuevoEstado
+    });
 
     await enviarCorreo({
       to: q.clienteEmail,
-      subject: `Your Quote Has Been Updated — So Italian Catering`,
+      subject: `Your Quote Has Been Updated — ${settings.businessName}`,
       html,
       apiKey: RESEND_API_KEY.value()
     });
@@ -183,9 +218,9 @@ exports.sendStatusUpdateEmail = onCall(
 );
 
 // ------------------------------------------------------------------
-// 4. Runs automatically every day at 9am (Guatemala time).
+// 4. Runs automatically every day at 9am (Indiana / Eastern time).
 //    Emails the owner a reminder for any quote that's been sitting in
-//    "Contacted" status for 2+ days with no further update.
+//    "Contacted" or "Quote Sent" status for 2+ days with no further update.
 // ------------------------------------------------------------------
 exports.dailyFollowUpCheck = onSchedule(
   { schedule: "every day 09:00", timeZone: "America/Indiana/Indianapolis", secrets: [RESEND_API_KEY] },

@@ -36,6 +36,7 @@
   <div class="tabs">
     <div class="tab active" data-tab="cotizaciones">Quotes</div>
     <div class="tab" data-tab="menu">Menu</div>
+    <div class="tab" data-tab="template">Email Template</div>
   </div>
 
   <!-- Quotes -->
@@ -77,6 +78,37 @@
       <div id="menuAdminList"></div>
     </div>
   </div>
+
+  <!-- Email Template -->
+  <div id="tab-template" style="display:none;">
+    <div class="card" style="margin-bottom:16px;">
+      <div class="section-title">Logo</div>
+      <div id="logoPreview" style="margin-bottom:10px;"></div>
+      <input type="file" id="logoInput" accept="image/*">
+      <p class="helper-text">Shows at the top of every quote email. Transparent PNG recommended.</p>
+    </div>
+    <div class="card" style="margin-bottom:16px;">
+      <div class="section-title">Business Name</div>
+      <input type="text" id="tplBusinessName">
+      <p class="helper-text">Used if no logo is uploaded, and as the closing signature.</p>
+    </div>
+    <div class="card" style="margin-bottom:16px;">
+      <div class="section-title">Intro Message</div>
+      <textarea id="tplIntro" rows="3"></textarea>
+      <p class="helper-text">Use <code>{clientName}</code> where you want the client's first name to appear.</p>
+    </div>
+    <div class="card" style="margin-bottom:16px;">
+      <div class="section-title">Policies (optional)</div>
+      <textarea id="tplPolicies" rows="6" placeholder="e.g. A 30% non-refundable deposit is required to confirm your event. Final guest count due 5 business days before the event. Cancellations..."></textarea>
+      <p class="helper-text">Shown in a highlighted box on every quote email. Leave empty to hide it.</p>
+    </div>
+    <div class="card" style="margin-bottom:16px;">
+      <div class="section-title">Closing Message</div>
+      <textarea id="tplFooter" rows="2"></textarea>
+    </div>
+    <button class="btn btn-primary" id="saveTemplateBtn">Save Template</button>
+    <span class="helper-text" id="templateSavedNote" style="margin-left:10px;"></span>
+  </div>
 </div>
 
 <!-- Quote detail modal -->
@@ -89,7 +121,7 @@
 <script type="module">
 import { db, auth, storage } from "./js/firebase-config.js";
 import {
-  collection, doc, getDocs, addDoc, updateDoc, deleteDoc, query, orderBy,
+  collection, doc, getDoc, getDocs, addDoc, updateDoc, setDoc, deleteDoc, query, orderBy,
   onSnapshot, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import {
@@ -128,7 +160,7 @@ onAuthStateChanged(auth, user => {
   document.getElementById("loginView").style.display = user ? "none" : "block";
   document.getElementById("dashView").style.display = user ? "block" : "none";
   document.getElementById("logoutBtn").style.display = user ? "inline-flex" : "none";
-  if (user) { escucharCotizaciones(); cargarMenuAdmin(); }
+  if (user) { escucharCotizaciones(); cargarMenuAdmin(); cargarTemplate(); }
 });
 
 // ---------- Tabs ----------
@@ -138,6 +170,7 @@ document.querySelectorAll(".tab").forEach(tab => {
     tab.classList.add("active");
     document.getElementById("tab-cotizaciones").style.display = tab.dataset.tab === "cotizaciones" ? "block" : "none";
     document.getElementById("tab-menu").style.display = tab.dataset.tab === "menu" ? "block" : "none";
+    document.getElementById("tab-template").style.display = tab.dataset.tab === "template" ? "block" : "none";
   });
 });
 
@@ -504,6 +537,60 @@ document.getElementById("addMenuBtn").addEventListener("click", async () => {
   document.getElementById("mPrecio").value = "";
   document.getElementById("mDescripcion").value = "";
   mostrarToast("Menu item added");
+});
+
+// ---------- Email Template ----------
+const DEFAULT_TEMPLATE = {
+  businessName: "So Italian Catering",
+  introText: "Hi {clientName}, thanks for your interest! Here's a preliminary summary of your quote:",
+  policiesText: "",
+  footerText: "Thank you for considering us for your event!",
+  logoUrl: null
+};
+let currentTemplate = { ...DEFAULT_TEMPLATE };
+
+async function cargarTemplate() {
+  const snap = await getDoc(doc(db, "settings", "quoteEmail"));
+  currentTemplate = snap.exists() ? { ...DEFAULT_TEMPLATE, ...snap.data() } : { ...DEFAULT_TEMPLATE };
+  document.getElementById("tplBusinessName").value = currentTemplate.businessName;
+  document.getElementById("tplIntro").value = currentTemplate.introText;
+  document.getElementById("tplPolicies").value = currentTemplate.policiesText;
+  document.getElementById("tplFooter").value = currentTemplate.footerText;
+  renderLogoPreview();
+}
+
+function renderLogoPreview() {
+  const el = document.getElementById("logoPreview");
+  if (!el) return;
+  el.innerHTML = currentTemplate.logoUrl
+    ? `<img src="${currentTemplate.logoUrl}" style="max-height:80px; display:block;">`
+    : `<p class="helper-text">No logo uploaded yet — the business name will be used instead.</p>`;
+}
+
+document.getElementById("logoInput").addEventListener("change", async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const path = `branding/logo_${Date.now()}_${file.name}`;
+  const fileRef = storageRef(storage, path);
+  await uploadBytes(fileRef, file);
+  currentTemplate.logoUrl = await getDownloadURL(fileRef);
+  renderLogoPreview();
+  mostrarToast("Logo uploaded — click Save Template to apply it");
+});
+
+document.getElementById("saveTemplateBtn").addEventListener("click", async () => {
+  const data = {
+    businessName: document.getElementById("tplBusinessName").value.trim() || DEFAULT_TEMPLATE.businessName,
+    introText: document.getElementById("tplIntro").value.trim() || DEFAULT_TEMPLATE.introText,
+    policiesText: document.getElementById("tplPolicies").value.trim(),
+    footerText: document.getElementById("tplFooter").value.trim() || DEFAULT_TEMPLATE.footerText,
+    logoUrl: currentTemplate.logoUrl || null
+  };
+  await setDoc(doc(db, "settings", "quoteEmail"), data, { merge: true });
+  currentTemplate = data;
+  mostrarToast("Template saved");
+  document.getElementById("templateSavedNote").textContent = "Applies to every quote email sent from now on.";
+  setTimeout(() => { document.getElementById("templateSavedNote").textContent = ""; }, 4000);
 });
 
 function mostrarToast(msg) {
