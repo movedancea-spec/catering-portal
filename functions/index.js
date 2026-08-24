@@ -111,6 +111,10 @@ exports.onCotizacionCreated = onDocumentCreated(
     const tenant = await getTenant(tenantId);
     if (!tenant || tenant.active === false) return; // safety net, shouldn't normally happen
 
+    // Manually-added clients (e.g. migrating a past client list) can skip
+    // the automatic emails — the owner controls this with a checkbox.
+    if (q.omitirCorreoInicial === true) return;
+
     const settings = await getTemplateSettings(tenantId);
 
     const resumenHtml = buildQuoteEmailHtml(q, settings, {
@@ -433,3 +437,45 @@ exports.eventDateReminderCheck = onSchedule(
     return null;
   }
 );
+
+// ------------------------------------------------------------------
+// 9. Super admin permanently deletes a restaurant and all its data
+//    (menu, quotes, messages, settings). Cannot be undone.
+// ------------------------------------------------------------------
+exports.deleteTenant = onCall(async (request) => {
+  if (!request.auth || request.auth.token.role !== "superadmin") throw new HttpsError("permission-denied", "Super admin access required.");
+  const { tenantId } = request.data;
+  if (!tenantId) throw new HttpsError("invalid-argument", "Missing tenantId.");
+
+  const tenantRef = db.collection("tenants").doc(tenantId);
+  const tenantSnap = await tenantRef.get();
+  if (!tenantSnap.exists) throw new HttpsError("not-found", "Restaurant not found.");
+  const tenant = tenantSnap.data();
+
+  const quotesSnap = await tenantRef.collection("cotizaciones").get();
+  for (const q of quotesSnap.docs) {
+    const msgsSnap = await q.ref.collection("mensajes").get();
+    if (!msgsSnap.empty) {
+      const msgBatch = db.batch();
+      msgsSnap.docs.forEach(m => msgBatch.delete(m.ref));
+      await msgBatch.commit();
+    }
+    await q.ref.delete();
+  }
+
+  const menuSnap = await tenantRef.collection("menu").get();
+  if (!menuSnap.empty) {
+    const menuBatch = db.batch();
+    menuSnap.docs.forEach(m => menuBatch.delete(m.ref));
+    await menuBatch.commit();
+  }
+
+  await tenantRef.collection("settings").doc("quoteEmail").delete().catch(() => {});
+  await tenantRef.delete();
+
+  if (tenant.ownerUid) {
+    await admin.auth().updateUser(tenant.ownerUid, { disabled: true }).catch(() => {});
+  }
+
+  return { ok: true };
+});

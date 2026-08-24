@@ -71,6 +71,7 @@ const functions = getFunctions();
 const bootstrapSuperAdmin = httpsCallable(functions, "bootstrapSuperAdmin");
 const createTenant = httpsCallable(functions, "createTenant");
 const migrateLegacyData = httpsCallable(functions, "migrateLegacyData");
+const deleteTenant = httpsCallable(functions, "deleteTenant");
 
 document.getElementById("migrateBtn").addEventListener("click", async () => {
   const ownerUid = document.getElementById("migrateOwnerUid").value.trim();
@@ -173,11 +174,12 @@ function renderTenants(tenants) {
   if (tenants.length === 0) { list.innerHTML = `<p class="helper-text">No restaurants yet.</p>`; return; }
 
   list.innerHTML = tenants.map(t => `
-    <div class="quote-row" style="grid-template-columns: 1.4fr 1fr 1fr auto;">
+    <div class="quote-row" style="grid-template-columns: 1.4fr 1fr 1fr auto auto;">
       <div><strong>${t.name}</strong><br><span class="helper-text">${t.ownerEmail || "—"}</span></div>
       <div><span class="helper-text">/${t.id}</span></div>
       <div><span class="badge ${t.active === false ? "badge-perdida" : "badge-cerrada"}">${t.active === false ? "Inactive" : "Active"}</span></div>
       <div><button class="btn btn-ghost btn-sm toggle-active-btn" data-id="${t.id}" data-active="${t.active !== false}">${t.active === false ? "Activate" : "Deactivate"}</button></div>
+      <div><button class="btn btn-ghost btn-sm delete-tenant-btn" data-id="${t.id}" data-name="${t.name}" style="color:#A34E22; border-color:#A34E22;">Delete</button></div>
     </div>
   `).join("");
 
@@ -186,6 +188,25 @@ function renderTenants(tenants) {
       const isActive = btn.dataset.active === "true";
       await updateDoc(doc(db, "tenants", btn.dataset.id), { active: !isActive });
       mostrarToast(isActive ? "Restaurant deactivated" : "Restaurant activated");
+    });
+  });
+
+  list.querySelectorAll(".delete-tenant-btn").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const name = btn.dataset.name;
+      const typed = prompt(`This permanently deletes "${name}" and ALL of its menu items, quotes, and messages. This cannot be undone.\n\nType the restaurant's name to confirm:`);
+      if (typed !== name) {
+        if (typed !== null) alert("Name didn't match — nothing was deleted.");
+        return;
+      }
+      btn.disabled = true; btn.textContent = "Deleting…";
+      try {
+        await deleteTenant({ tenantId: btn.dataset.id });
+        mostrarToast("Restaurant deleted");
+      } catch (e) {
+        alert(e.message || "Couldn't delete the restaurant.");
+        btn.disabled = false; btn.textContent = "Delete";
+      }
     });
   });
 }

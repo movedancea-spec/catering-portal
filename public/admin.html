@@ -49,7 +49,10 @@
           <option>New</option><option>Contacted</option><option>Quote Sent</option><option>Closed</option><option>Lost</option>
         </select>
       </div>
-      <button class="btn btn-ghost btn-sm" id="downloadPdfBtn">⬇ Download Client Backup (PDF)</button>
+      <div style="display:flex; gap:10px;">
+        <button class="btn btn-primary btn-sm" id="addClientBtn">+ Add Client Manually</button>
+        <button class="btn btn-ghost btn-sm" id="downloadPdfBtn">⬇ Download Client Backup (PDF)</button>
+      </div>
     </div>
     <div class="card">
       <div class="quote-row head"><div>Client</div><div>Event</div><div>Guests</div><div>Total</div><div>Status</div><div></div></div>
@@ -373,6 +376,112 @@ async function abrirDetalle(id) {
   });
 
   escucharMensajes(id);
+}
+
+document.getElementById("addClientBtn").addEventListener("click", () => abrirNuevaCotizacion());
+
+function abrirNuevaCotizacion() {
+  const modal = document.getElementById("detailModal");
+  modal.innerHTML = `
+    <div class="section-title">Add Client Manually</div>
+    <p class="helper-text">Use this to bring in clients you already had before using this dashboard, or to log a quote from a phone call.</p>
+    <div class="field-row">
+      <div class="field"><label>Client full name</label><input type="text" id="newClienteNombre"></div>
+      <div class="field"><label>Email</label><input type="email" id="newClienteEmail"></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Phone</label><input type="tel" id="newClienteTelefono"></div>
+      <div class="field"><label>Number of guests</label><input type="number" id="newPersonas" min="1"></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Event date</label><input type="date" id="newFecha"></div>
+      <div class="field"><label>Event location (optional)</label><input type="text" id="newLugar"></div>
+    </div>
+    <div class="field">
+      <label>Status</label>
+      <select id="newEstado">${ESTADOS.map(e => `<option ${e === "New" ? "selected" : ""}>${e}</option>`).join("")}</select>
+    </div>
+    <div class="section-title" style="margin-top:8px;">Menu</div>
+    <div id="newMenuList"><p class="helper-text">Loading menu…</p></div>
+    <div class="ticket" style="position:static; margin-top:12px;">
+      <h4>Total</h4>
+      <div class="line total-line"><span>Total</span><span id="newTotalPreview">$0.00</span></div>
+    </div>
+    <div class="field" style="margin-top:12px;"><label>Notes (optional)</label><textarea id="newNotas" rows="2"></textarea></div>
+    <label style="display:flex; align-items:center; gap:6px; font-weight:400; margin-bottom:16px;">
+      <input type="checkbox" id="newEnviarCorreo" style="width:auto;">
+      Send this client a confirmation email now (leave unchecked for migrated/past clients)
+    </label>
+    <div style="display:flex; gap:10px; justify-content:flex-end;">
+      <button class="btn btn-ghost btn-sm" id="closeNewModalBtn">Cancel</button>
+      <button class="btn btn-primary btn-sm" id="saveNewClientBtn">Add Client</button>
+    </div>
+  `;
+  document.getElementById("detailOverlay").style.display = "flex";
+  document.getElementById("closeNewModalBtn").addEventListener("click", () => { document.getElementById("detailOverlay").style.display = "none"; });
+
+  const list = document.getElementById("newMenuList");
+  if (menu.length === 0) {
+    list.innerHTML = `<p class="helper-text">No menu items yet. Add some in the Menu tab first.</p>`;
+  } else {
+    list.innerHTML = menu.map(item => `
+      <label class="menu-item" style="cursor:pointer;">
+        <div class="info"><div class="name">${item.nombre} <span class="helper-text">(${item.categoria || "Menu"})</span></div><div class="price">$${Number(item.precio).toFixed(2)} / person</div></div>
+        <input type="checkbox" class="new-menu-checkbox" data-id="${item.id}" data-nombre="${item.nombre}" data-precio="${item.precio}" style="width:24px; height:24px; accent-color: var(--terracotta); flex-shrink:0;">
+      </label>
+    `).join("");
+    list.querySelectorAll(".new-menu-checkbox").forEach(chk => chk.addEventListener("change", recalcularNewTotal));
+  }
+  document.getElementById("newPersonas").addEventListener("input", recalcularNewTotal);
+
+  document.getElementById("saveNewClientBtn").addEventListener("click", async () => {
+    const clienteNombre = document.getElementById("newClienteNombre").value.trim();
+    const clienteEmail = document.getElementById("newClienteEmail").value.trim();
+    const clienteTelefono = document.getElementById("newClienteTelefono").value.trim();
+    const numPersonas = parseInt(document.getElementById("newPersonas").value, 10);
+    const fechaEvento = document.getElementById("newFecha").value;
+    const lugar = document.getElementById("newLugar").value.trim();
+    const estado = document.getElementById("newEstado").value;
+    const notas = document.getElementById("newNotas").value.trim();
+    const enviarCorreo = document.getElementById("newEnviarCorreo").checked;
+
+    if (!clienteNombre || !clienteEmail || !numPersonas) { alert("Client name, email, and number of guests are required."); return; }
+
+    const checked = Array.from(document.querySelectorAll(".new-menu-checkbox:checked"));
+    const items = checked.map(chk => ({ menuId: chk.dataset.id, nombre: chk.dataset.nombre, precio: parseFloat(chk.dataset.precio), cantidad: 1 }));
+    const total = items.reduce((sum, i) => sum + i.precio * i.cantidad * numPersonas, 0);
+
+    const btn = document.getElementById("saveNewClientBtn");
+    btn.disabled = true; btn.textContent = "Adding…";
+
+    try {
+      await addDoc(tCol("cotizaciones"), {
+        clienteNombre, clienteEmail, clienteTelefono: clienteTelefono || null,
+        fechaEvento: fechaEvento || null, lugar: lugar || null, numPersonas,
+        items, total, notas: notas || null, estado,
+        omitirCorreoInicial: !enviarCorreo,
+        creadoEn: serverTimestamp(), actualizadoEn: serverTimestamp()
+      });
+      mostrarToast("Client added");
+      document.getElementById("detailOverlay").style.display = "none";
+    } catch (e) {
+      console.error(e);
+      alert("Couldn't add this client.");
+    }
+    btn.disabled = false; btn.textContent = "Add Client";
+  });
+
+  recalcularNewTotal();
+}
+
+function recalcularNewTotal() {
+  const personasInput = document.getElementById("newPersonas");
+  const totalEl = document.getElementById("newTotalPreview");
+  if (!personasInput || !totalEl) return;
+  const personas = parseInt(personasInput.value, 10) || 0;
+  let total = 0;
+  document.querySelectorAll(".new-menu-checkbox:checked").forEach(chk => { total += parseFloat(chk.dataset.precio) * personas; });
+  totalEl.textContent = `$${total.toFixed(2)}`;
 }
 
 function renderEditMenu(q) {
