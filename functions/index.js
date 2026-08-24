@@ -190,7 +190,7 @@ exports.sendStatusUpdateEmail = onCall(
 exports.dailyFollowUpCheck = onSchedule(
   { schedule: "every day 09:00", timeZone: "America/Indiana/Indianapolis", secrets: [RESEND_API_KEY] },
   async () => {
-    const snap = await db.collection("cotizaciones").where("estado", "==", "Contacted").get();
+    const snap = await db.collection("cotizaciones").where("estado", "in", ["Contacted", "Quote Sent"]).get();
     const twoDaysMs = 2 * 24 * 60 * 60 * 1000;
 
     const pending = snap.docs.filter(d => {
@@ -210,7 +210,7 @@ exports.dailyFollowUpCheck = onSchedule(
     const html = `
       <div style="font-family:sans-serif; color:#2B2119;">
         <h2 style="color:#33482E;">Follow-up reminder</h2>
-        <p>These clients were marked "Contacted" 2 or more days ago with no further update. Time to reach out again:</p>
+        <p>These clients have been in "Contacted" or "Quote Sent" status for 2 or more days with no further update. Time to reach out again:</p>
         <table style="width:100%; border-collapse:collapse; margin:12px 0;">
           <tr style="text-align:left; border-bottom:2px solid #33482E;">
             <th style="padding:6px 10px;">Client</th><th style="padding:6px 10px;">Email</th><th style="padding:6px 10px;">Event date</th>

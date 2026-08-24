@@ -163,7 +163,7 @@ function renderQuotes() {
 
   const twoDaysMs = 2 * 24 * 60 * 60 * 1000;
   const isOverdue = q => {
-    if (q.estado !== "Contacted" || !q.fechaContactado) return false;
+    if ((q.estado !== "Contacted" && q.estado !== "Quote Sent") || !q.fechaContactado) return false;
     const contactedAt = q.fechaContactado.toMillis ? q.fechaContactado.toMillis() : 0;
     return Date.now() - contactedAt >= twoDaysMs;
   };
@@ -288,8 +288,9 @@ async function abrirDetalle(id) {
     const updateData = {
       estado: nuevoEstado, numPersonas, items, total, actualizadoEn: serverTimestamp()
     };
-    // Every time a quote is (re)marked as "Contacted", reset the 2-day follow-up clock.
-    if (nuevoEstado === "Contacted") {
+    // Every time a quote is (re)marked as "Contacted" or "Quote Sent",
+    // reset the 2-day follow-up clock. Closed/Lost quotes never get reminders.
+    if (nuevoEstado === "Contacted" || nuevoEstado === "Quote Sent") {
       updateData.fechaContactado = serverTimestamp();
       updateData.recordatorioEnviado = false;
     }
