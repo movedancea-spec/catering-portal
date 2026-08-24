@@ -106,7 +106,7 @@ exports.sendMessageToClient = onCall(
   { secrets: [RESEND_API_KEY] },
   async (request) => {
     if (!request.auth) throw new Error("Unauthorized");
-    const { quoteId, texto, adjuntoUrl, adjuntoNombre } = request.data;
+    const { quoteId, texto, adjuntoUrl, adjuntoNombre, cotizacion } = request.data;
 
     const snap = await db.collection("cotizaciones").doc(quoteId).get();
     if (!snap.exists) throw new Error("Quote not found");
@@ -116,10 +116,20 @@ exports.sendMessageToClient = onCall(
       ? `<p><a href="${adjuntoUrl}" style="color:#33482E; font-weight:bold;">📎 View attached file${adjuntoNombre ? `: ${adjuntoNombre}` : ""}</a></p>`
       : "";
 
+    const cotizacionHtml = (cotizacion && cotizacion.items && cotizacion.items.length)
+      ? `
+        <p><strong>Number of guests:</strong> ${cotizacion.numPersonas}</p>
+        <table style="width:100%; border-collapse:collapse; margin:12px 0;">
+          ${itemsHtml(cotizacion.items, cotizacion.numPersonas)}
+          <tr><td style="padding:8px; font-weight:bold; border-top:2px solid #33482E;">Total</td>
+              <td style="padding:8px; font-weight:bold; text-align:right; border-top:2px solid #33482E;">${fmtPrice(cotizacion.total)}</td></tr>
+        </table>`
+      : "";
+
     await enviarCorreo({
       to: q.clienteEmail,
       subject: `New message about your quote — So Italian Catering`,
-      html: `<div style="font-family:sans-serif;"><p>Hi ${q.clienteNombre},</p><p>${texto || ""}</p>${adjuntoHtml}<p>— So Italian Catering</p></div>`,
+      html: `<div style="font-family:sans-serif;"><p>Hi ${q.clienteNombre},</p><p>${texto || ""}</p>${cotizacionHtml}${adjuntoHtml}<p>— So Italian Catering</p></div>`,
       apiKey: RESEND_API_KEY.value()
     });
 

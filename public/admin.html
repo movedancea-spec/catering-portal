@@ -169,12 +169,24 @@ function renderQuotes() {
       <div>${q.numPersonas || "—"}</div>
       <div>$${Number(q.total || 0).toFixed(2)}</div>
       <div><span class="badge ${badgeClass(q.estado)}">${q.estado}</span></div>
-      <div><button class="btn btn-ghost btn-sm view-btn" data-id="${q.id}">View</button></div>
+      <div style="display:flex; gap:6px;">
+        <button class="btn btn-ghost btn-sm view-btn" data-id="${q.id}">View</button>
+        <button class="btn btn-ghost btn-sm del-quote-btn" data-id="${q.id}">Delete</button>
+      </div>
     </div>
   `).join("");
 
   list.querySelectorAll(".view-btn").forEach(btn => {
     btn.addEventListener("click", () => abrirDetalle(btn.dataset.id));
+  });
+
+  list.querySelectorAll(".del-quote-btn").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      if (confirm("Delete this quote? This can't be undone.")) {
+        await deleteDoc(doc(db, "cotizaciones", btn.dataset.id));
+        mostrarToast("Quote deleted");
+      }
+    });
   });
 }
 
@@ -220,6 +232,10 @@ async function abrirDetalle(id) {
     <div class="field">
       <textarea id="nuevoMensaje" rows="2" placeholder="Write a message for the client…"></textarea>
     </div>
+    <label style="display:flex; align-items:center; gap:6px; font-weight:400; margin-bottom:10px;">
+      <input type="checkbox" id="incluirCotizacion" style="width:auto;">
+      Include the current quote summary (menu selected above) in this email
+    </label>
     <div class="field">
       <label style="font-weight:400;">Attach a file (optional)</label>
       <input type="file" id="adjuntoInput">
@@ -273,7 +289,8 @@ async function abrirDetalle(id) {
     const texto = document.getElementById("nuevoMensaje").value.trim();
     const fileInput = document.getElementById("adjuntoInput");
     const file = fileInput.files[0];
-    if (!texto && !file) return;
+    const incluirCotizacion = document.getElementById("incluirCotizacion").checked;
+    if (!texto && !file && !incluirCotizacion) return;
 
     const btn = document.getElementById("sendMsgBtn");
     const statusEl = document.getElementById("adjuntoStatus");
@@ -293,12 +310,24 @@ async function abrirDetalle(id) {
         statusEl.textContent = "";
       }
 
+      let cotizacion = null;
+      if (incluirCotizacion) {
+        const numPersonas = parseInt(document.getElementById("editPersonas").value, 10) || q.numPersonas;
+        const checked = Array.from(document.querySelectorAll(".edit-menu-checkbox:checked"));
+        const items = checked.map(chk => ({ nombre: chk.dataset.nombre, precio: parseFloat(chk.dataset.precio), cantidad: 1 }));
+        const total = items.reduce((sum, i) => sum + i.precio * i.cantidad * numPersonas, 0);
+        cotizacion = { items, numPersonas, total };
+      }
+
       await addDoc(collection(db, "cotizaciones", id, "mensajes"), {
-        autor: "owner", texto: texto || "(attachment)", adjuntoUrl, adjuntoNombre, fecha: serverTimestamp()
+        autor: "owner",
+        texto: texto || (incluirCotizacion ? "(quote summary attached)" : "(attachment)"),
+        adjuntoUrl, adjuntoNombre, fecha: serverTimestamp()
       });
-      await sendMessageToClient({ quoteId: id, texto, adjuntoUrl, adjuntoNombre });
+      await sendMessageToClient({ quoteId: id, texto, adjuntoUrl, adjuntoNombre, cotizacion });
 
       document.getElementById("nuevoMensaje").value = "";
+      document.getElementById("incluirCotizacion").checked = false;
       fileInput.value = "";
       mostrarToast("Message sent by email");
     } catch (e) {
@@ -355,7 +384,7 @@ function escucharMensajes(id) {
       const adjunto = m.adjuntoUrl
         ? `<br><a href="${m.adjuntoUrl}" target="_blank" style="color:inherit; text-decoration:underline;">📎 ${m.adjuntoNombre || "View attachment"}</a>`
         : "";
-      return `<div class="msg msg-${m.autor === "owner" || m.autor === "dueño" ? "dueño" : "cliente"}">${m.texto}${adjunto}</div>`;
+      return `<div class="msg msg-${m.autor === "owner" || m.autor === "dueño" ? "owner" : "client"}">${m.texto}${adjunto}</div>`;
     }).join("");
     thread.scrollTop = thread.scrollHeight;
   });
@@ -377,13 +406,16 @@ function renderMenuAdmin() {
     return;
   }
   list.innerHTML = menu.map(item => `
-    <div class="menu-item">
+    <div class="menu-item" id="menu-row-${item.id}">
       <div class="info">
         <div class="name">${item.nombre} <span class="helper-text">(${item.categoria || "Menu"})</span></div>
         ${item.descripcion ? `<div class="desc">${item.descripcion}</div>` : ""}
         <div class="price">$${Number(item.precio).toFixed(2)} / person</div>
       </div>
-      <button class="btn btn-ghost btn-sm del-menu-btn" data-id="${item.id}">Delete</button>
+      <div style="display:flex; gap:8px; flex-shrink:0;">
+        <button class="btn btn-ghost btn-sm edit-menu-btn" data-id="${item.id}">Edit</button>
+        <button class="btn btn-ghost btn-sm del-menu-btn" data-id="${item.id}">Delete</button>
+      </div>
     </div>
   `).join("");
 
@@ -393,6 +425,43 @@ function renderMenuAdmin() {
         await deleteDoc(doc(db, "menu", btn.dataset.id));
       }
     });
+  });
+
+  list.querySelectorAll(".edit-menu-btn").forEach(btn => {
+    btn.addEventListener("click", () => abrirEdicionMenuItem(btn.dataset.id));
+  });
+}
+
+function abrirEdicionMenuItem(id) {
+  const item = menu.find(m => m.id === id);
+  if (!item) return;
+  const row = document.getElementById(`menu-row-${id}`);
+  if (!row) return;
+  row.innerHTML = `
+    <div style="width:100%;">
+      <div class="field-row">
+        <div class="field"><label>Category</label><input type="text" id="editCat-${id}" value="${item.categoria || ""}"></div>
+        <div class="field"><label>Name</label><input type="text" id="editName-${id}" value="${item.nombre}"></div>
+      </div>
+      <div class="field-row">
+        <div class="field"><label>Price per person ($)</label><input type="number" step="0.01" id="editPrice-${id}" value="${item.precio}"></div>
+        <div class="field"><label>Description</label><input type="text" id="editDesc-${id}" value="${item.descripcion || ""}"></div>
+      </div>
+      <div style="display:flex; gap:8px; justify-content:flex-end;">
+        <button class="btn btn-ghost btn-sm cancel-edit-btn">Cancel</button>
+        <button class="btn btn-primary btn-sm save-edit-btn">Save</button>
+      </div>
+    </div>
+  `;
+  row.querySelector(".cancel-edit-btn").addEventListener("click", renderMenuAdmin);
+  row.querySelector(".save-edit-btn").addEventListener("click", async () => {
+    const categoria = document.getElementById(`editCat-${id}`).value.trim();
+    const nombre = document.getElementById(`editName-${id}`).value.trim();
+    const precio = parseFloat(document.getElementById(`editPrice-${id}`).value);
+    const descripcion = document.getElementById(`editDesc-${id}`).value.trim();
+    if (!nombre || isNaN(precio)) { alert("Name and price are required."); return; }
+    await updateDoc(doc(db, "menu", id), { categoria: categoria || "Menu", nombre, precio, descripcion: descripcion || null });
+    mostrarToast("Menu item updated");
   });
 }
 
