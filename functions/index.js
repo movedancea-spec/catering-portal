@@ -188,7 +188,7 @@ exports.sendStatusUpdateEmail = onCall(
 //    "Contacted" status for 2+ days with no further update.
 // ------------------------------------------------------------------
 exports.dailyFollowUpCheck = onSchedule(
-  { schedule: "every day 09:00", timeZone: "America/Guatemala", secrets: [RESEND_API_KEY] },
+  { schedule: "every day 09:00", timeZone: "America/Indiana/Indianapolis", secrets: [RESEND_API_KEY] },
   async () => {
     const snap = await db.collection("cotizaciones").where("estado", "==", "Contacted").get();
     const twoDaysMs = 2 * 24 * 60 * 60 * 1000;
