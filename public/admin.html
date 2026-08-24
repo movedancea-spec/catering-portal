@@ -84,7 +84,10 @@
     <div class="card" style="margin-bottom:16px;">
       <div class="section-title">Logo</div>
       <div id="logoPreview" style="margin-bottom:10px;"></div>
-      <input type="file" id="logoInput" accept="image/*">
+      <div style="display:flex; align-items:center; gap:10px;">
+        <input type="file" id="logoInput" accept="image/*">
+        <button class="btn btn-ghost btn-sm" id="removeLogoBtn" style="display:none;">Remove Logo</button>
+      </div>
       <p class="helper-text">Shows at the top of every quote email. Transparent PNG recommended.</p>
     </div>
     <div class="card" style="margin-bottom:16px;">
@@ -561,11 +564,24 @@ async function cargarTemplate() {
 
 function renderLogoPreview() {
   const el = document.getElementById("logoPreview");
+  const removeBtn = document.getElementById("removeLogoBtn");
   if (!el) return;
-  el.innerHTML = currentTemplate.logoUrl
-    ? `<img src="${currentTemplate.logoUrl}" style="max-height:80px; display:block;">`
-    : `<p class="helper-text">No logo uploaded yet — the business name will be used instead.</p>`;
+  if (currentTemplate.logoUrl) {
+    el.innerHTML = `<img src="${currentTemplate.logoUrl}" style="max-height:80px; display:block;">`;
+    if (removeBtn) removeBtn.style.display = "inline-flex";
+  } else {
+    el.innerHTML = `<p class="helper-text">No logo uploaded yet — the business name will be used instead.</p>`;
+    if (removeBtn) removeBtn.style.display = "none";
+  }
 }
+
+document.getElementById("removeLogoBtn").addEventListener("click", async () => {
+  if (!confirm("Remove the logo? Emails will show your business name instead until you upload a new one.")) return;
+  currentTemplate.logoUrl = null;
+  renderLogoPreview();
+  await setDoc(doc(db, "settings", "quoteEmail"), currentTemplate, { merge: true });
+  mostrarToast("Logo removed");
+});
 
 document.getElementById("logoInput").addEventListener("change", async (e) => {
   const file = e.target.files[0];
