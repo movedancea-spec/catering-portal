@@ -10,9 +10,18 @@ const db = admin.firestore();
 //   firebase functions:secrets:set RESEND_API_KEY
 const RESEND_API_KEY = defineSecret("RESEND_API_KEY");
 
-// Cambiá estos dos valores por los tuyos.
-const FROM_EMAIL = "So Italian Catering <cotizaciones@tudominio.com>";
-const OWNER_EMAIL = "tucorreo@tudominio.com";
+// MODO DEMO: usando el dominio compartido de prueba de Resend.
+// Con este dominio, Resend SOLO permite enviar correos a la dirección
+// con la que te registraste en Resend (tu propio correo) — no a clientes
+// reales todavía. Cuando tengas tu dominio propio, cambiá esta línea por
+// algo como "So Italian Catering <cotizaciones@tudominio.com>" y verificá
+// el dominio en Resend (Domains → Add Domain) para poder enviar a cualquiera.
+const FROM_EMAIL = "So Italian Catering <onboarding@resend.dev>";
+
+// Poné aquí el correo con el que te registraste en Resend — ahí es donde
+// vas a recibir el aviso de "nueva cotización", y también el único correo
+// al que le podés mandar la pre-cotización de prueba mientras estés en modo demo.
+const OWNER_EMAIL = "tucorreo@resend.com";
 
 async function enviarCorreo({ to, subject, html, apiKey }) {
   const res = await fetch("https://api.resend.com/emails", {

@@ -20,11 +20,16 @@ Formulario público con calculadora en vivo → Firestore → correo automático
 ## Paso 2 — Crear la cuenta de correo (Resend)
 
 1. Creá una cuenta gratis en https://resend.com (tiene 3,000 correos/mes gratis).
-2. Verificá tu dominio (o usá el dominio de prueba de Resend mientras configurás el tuyo).
-3. Generá una **API Key** en Resend.
-4. En `functions/index.js`, cambiá:
-   - `FROM_EMAIL` por tu correo remitente verificado (ej. `"So Italian Catering <cotizaciones@soitaliancatering.com>"`)
-   - `OWNER_EMAIL` por el correo donde querés recibir el aviso de cada cotización nueva
+2. Generá una **API Key** en Resend (API Keys → Create API Key).
+3. En `functions/index.js`, cambiá `OWNER_EMAIL` por el correo con el que te registraste en Resend.
+
+> **Modo demo (sin dominio propio):** el código ya viene configurado para usar el remitente de prueba de Resend (`onboarding@resend.dev`). Mientras no verifiques un dominio propio, Resend **solo permite enviar correos a la dirección con la que te registraste** — es una protección anti-spam de ellos, no algo que se pueda evitar. Para probar el formulario, usá tu propio correo en el campo de contacto del cliente.
+>
+> **Cuando consigas tu dominio** (ej. `soitaliancatering.com`): andá a Resend → Domains → Add Domain, seguí los pasos para verificarlo (agregar unos registros DNS), y luego cambiá en `functions/index.js`:
+> - `FROM_EMAIL` → `"So Italian Catering <cotizaciones@tudominio.com>"`
+> - `OWNER_EMAIL` → tu correo real del negocio
+>
+> Después de cambiar esos valores, un `git push` (si configuraste el Paso 7) o `firebase deploy --only functions` los actualiza.
 
 ## Paso 3 — Instalar herramientas y conectar el proyecto
 
