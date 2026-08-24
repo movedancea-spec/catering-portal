@@ -8,12 +8,12 @@ import { getFirestore } from "https://www.gstatic.com/firebasejs/10.12.2/firebas
 import { getAuth } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
 const firebaseConfig = {
-  apiKey: "PEGA_AQUI_TU_API_KEY",
-  authDomain: "PEGA_AQUI.firebaseapp.com",
-  projectId: "PEGA_AQUI_TU_PROJECT_ID",
-  storageBucket: "PEGA_AQUI.appspot.com",
-  messagingSenderId: "PEGA_AQUI",
-  appId: "PEGA_AQUI"
+  apiKey: "AIzaSyB4zYmzgGLXYZ2lDXKVTqhK-wEcb9vhOO4",
+  authDomain: "catering-portal-39b35.firebaseapp.com",
+  projectId: "catering-portal-39b35",
+  storageBucket: "catering-portal-39b35.firebasestorage.app",
+  messagingSenderId: "804279478043",
+  appId: "1:804279478043:web:e3b98255d6d93d140055be"
 };
 
 const app = initializeApp(firebaseConfig);
