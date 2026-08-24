@@ -1,5 +1,5 @@
 const { onDocumentCreated } = require("firebase-functions/v2/firestore");
-const { onCall } = require("firebase-functions/v2/https");
+const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const { onSchedule } = require("firebase-functions/v2/scheduler");
 const { defineSecret } = require("firebase-functions/params");
 const admin = require("firebase-admin");
@@ -27,7 +27,7 @@ async function enviarCorreo({ to, subject, html, apiKey }) {
   });
   if (!res.ok) {
     const errText = await res.text();
-    throw new Error(`Resend error: ${res.status} ${errText}`);
+    throw new HttpsError("internal", `Resend error: ${res.status} ${errText}`);
   }
 }
 
@@ -91,10 +91,10 @@ function buildQuoteEmailHtml(q, settings, { heading, statusLine, disclaimer } = 
 }
 
 function requireTenantAccess(request, tenantId) {
-  if (!request.auth) throw new Error("Unauthorized");
+  if (!request.auth) throw new HttpsError("unauthenticated", "You must be logged in.");
   const claims = request.auth.token;
   if (claims.role !== "superadmin" && claims.tenantId !== tenantId) {
-    throw new Error("Unauthorized for this restaurant");
+    throw new HttpsError("permission-denied", "You do not have access to this restaurant.");
   }
 }
 
@@ -153,7 +153,7 @@ exports.sendMessageToClient = onCall(
     requireTenantAccess(request, tenantId);
 
     const snap = await db.collection("tenants").doc(tenantId).collection("cotizaciones").doc(quoteId).get();
-    if (!snap.exists) throw new Error("Quote not found");
+    if (!snap.exists) throw new HttpsError("not-found", "Quote not found.");
     const q = snap.data();
     const settings = await getTemplateSettings(tenantId);
 
@@ -196,7 +196,7 @@ exports.sendStatusUpdateEmail = onCall(
     requireTenantAccess(request, tenantId);
 
     const snap = await db.collection("tenants").doc(tenantId).collection("cotizaciones").doc(quoteId).get();
-    if (!snap.exists) throw new Error("Quote not found");
+    if (!snap.exists) throw new HttpsError("not-found", "Quote not found.");
     const q = snap.data();
     const settings = await getTemplateSettings(tenantId);
 
@@ -276,9 +276,9 @@ exports.dailyFollowUpCheck = onSchedule(
 //    platform super admin. Fails if a super admin already exists.
 // ------------------------------------------------------------------
 exports.bootstrapSuperAdmin = onCall(async (request) => {
-  if (!request.auth) throw new Error("Unauthorized");
+  if (!request.auth) throw new HttpsError("unauthenticated", "You must be logged in.");
   const existing = await db.collection("superadmins").limit(1).get();
-  if (!existing.empty) throw new Error("A super admin already exists for this platform.");
+  if (!existing.empty) throw new HttpsError("already-exists", "A super admin already exists for this platform.");
 
   await admin.auth().setCustomUserClaims(request.auth.uid, { role: "superadmin" });
   await db.collection("superadmins").doc(request.auth.uid).set({
@@ -292,14 +292,14 @@ exports.bootstrapSuperAdmin = onCall(async (request) => {
 // 6. Super admin creates a new restaurant account.
 // ------------------------------------------------------------------
 exports.createTenant = onCall(async (request) => {
-  if (!request.auth || request.auth.token.role !== "superadmin") throw new Error("Unauthorized");
+  if (!request.auth || request.auth.token.role !== "superadmin") throw new HttpsError("permission-denied", "Super admin access required.");
   const { name, slug, ownerEmail, ownerPassword } = request.data;
-  if (!name || !slug || !ownerEmail || !ownerPassword) throw new Error("Missing required fields");
+  if (!name || !slug || !ownerEmail || !ownerPassword) throw new HttpsError("invalid-argument", "Please fill in every field.");
 
   const cleanSlug = slug.toLowerCase().trim().replace(/[^a-z0-9-]/g, "-");
   const tenantRef = db.collection("tenants").doc(cleanSlug);
   const existing = await tenantRef.get();
-  if (existing.exists) throw new Error("That web address is already taken. Choose a different one.");
+  if (existing.exists) throw new HttpsError("already-exists", "That web address is already taken. Choose a different one.");
 
   const userRecord = await admin.auth().createUser({ email: ownerEmail, password: ownerPassword });
   await admin.auth().setCustomUserClaims(userRecord.uid, { tenantId: cleanSlug });
@@ -328,9 +328,9 @@ exports.createTenant = onCall(async (request) => {
 //    structure, and links an existing Auth account as its owner.
 // ------------------------------------------------------------------
 exports.migrateLegacyData = onCall(async (request) => {
-  if (!request.auth || request.auth.token.role !== "superadmin") throw new Error("Unauthorized");
+  if (!request.auth || request.auth.token.role !== "superadmin") throw new HttpsError("permission-denied", "Super admin access required.");
   const { tenantId, ownerUid, ownerEmail } = request.data;
-  if (!tenantId) throw new Error("Missing tenantId");
+  if (!tenantId) throw new HttpsError("invalid-argument", "Missing tenantId.");
 
   const tenantRef = db.collection("tenants").doc(tenantId);
   const tenantSnap = await tenantRef.get();
